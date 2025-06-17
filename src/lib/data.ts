@@ -44,7 +44,7 @@ const _subjects: Subject[] = [
   { id: 's3', name: 'Linux System Administration (LSA)', facultyOptions: ['f7', 'f8', 'f9'] },
   { id: 's4', name: 'Object Oriented Analysis & Design (OOAD)', facultyOptions: ['f10', 'f11', 'f12'] },
   { id: 's5', name: 'Management Sciences (MS)', facultyOptions: ['f13', 'f14', 'f15'] },
-  { id: 's6', name: 'BCT', facultyOptions: ['f16', 'f17', 'f18'] },
+  { id: 's6', name: 'Block Chain Technologies (BCT)', facultyOptions: ['f16', 'f17', 'f18'] },
 ];
 
 let facultySlotsData: Record<string, number> = {}; // Key: `${facultyId}_${subjectId}`
