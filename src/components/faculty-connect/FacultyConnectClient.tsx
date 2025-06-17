@@ -11,10 +11,10 @@ import { FacultySelectionList } from './FacultySelectionList';
 import { ScalabilityGuidance } from './ScalabilityGuidance';
 import type { Subject, Faculty } from '@/lib/data';
 import { facultyConnectFormSchema, type FacultyConnectFormValues } from '@/lib/schema';
-import { submitFacultySelection, fetchCurrentFacultySlots, resetAllFacultySlots, type FormState } from '@/lib/actions';
+import { submitFacultySelection, fetchCurrentFacultySlots, type FormState } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle, Send, Info, Loader2 } from 'lucide-react';
+import { CheckCircle, Send, Info, Loader2, ArrowRight, ArrowLeft } from 'lucide-react';
 
 interface FacultyConnectClientProps {
   initialSubjects: Subject[];
@@ -39,8 +39,8 @@ export default function FacultyConnectClient({
   const { toast } = useToast();
   const [formState, setFormState] = useState<FormState | undefined>();
   const [isSubmitted, setIsSubmitted] = useState(false);
-  // currentFacultySlots keys are `${facultyId}_${subjectId}`
   const [currentFacultySlots, setCurrentFacultySlots] = useState<Record<string, number>>(initialSlots);
+  const [currentStep, setCurrentStep] = useState(1);
 
   const form = useForm<FacultyConnectFormValues>({
     resolver: zodResolver(facultyConnectFormSchema),
@@ -54,7 +54,25 @@ export default function FacultyConnectClient({
     mode: 'onChange', 
   });
 
-  const { control, handleSubmit, reset, formState: { errors: clientErrors } } = form;
+  const { control, handleSubmit, reset, formState: { errors: clientErrors }, trigger } = form;
+
+  const handleNextStep = async () => {
+    const studentInfoFields: (keyof FacultyConnectFormValues)[] = ['rollNumber', 'name', 'email', 'whatsappNumber'];
+    // Need to cast studentInfoFields for trigger method for now.
+    // RHF's `trigger` type expects a single field or an array of specific field names from the schema.
+    // Casting to `any` or a more specific string array type if `keyof` isn't precise enough for `Path<T>`
+    const isValid = await trigger(studentInfoFields as unknown as  (keyof FacultyConnectFormValues)[]); 
+    if (isValid) {
+      setCurrentStep(2);
+    } else {
+      toast({
+        title: "Validation Error",
+        description: "Please correct the errors in the student information form before proceeding.",
+        variant: "destructive",
+        duration: 3000,
+      });
+    }
+  };
 
   const handleFacultySelectionChange = (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => {
     setCurrentFacultySlots(prevSlots => {
@@ -65,7 +83,6 @@ export default function FacultyConnectClient({
         const oldFaculty = facultyDetails(oldFacultyId);
         if (oldFaculty) {
           const oldSlotKey = `${oldFacultyId}_${subjectId}`;
-          // Increment slot for the old faculty for this specific subject
           if (updatedSlots[oldSlotKey] < oldFaculty.initialSlots) {
              updatedSlots[oldSlotKey] = (updatedSlots[oldSlotKey] || 0) + 1;
           }
@@ -74,7 +91,6 @@ export default function FacultyConnectClient({
       
       if (newFacultyId && newFacultyId !== oldFacultyId) {
         const newSlotKey = `${newFacultyId}_${subjectId}`;
-        // Decrement slot for the new faculty for this specific subject
         if (updatedSlots[newSlotKey] > 0) {
           updatedSlots[newSlotKey] = (updatedSlots[newSlotKey] || 0) - 1;
         }
@@ -108,7 +124,7 @@ export default function FacultyConnectClient({
         });
         setIsSubmitted(true);
         if (result.updatedSlots) {
-          setCurrentFacultySlots(result.updatedSlots); // Server provides authoritative slots
+          setCurrentFacultySlots(result.updatedSlots); 
         }
       } else {
         toast({
@@ -123,7 +139,6 @@ export default function FacultyConnectClient({
             if (result.fields.email) form.setError("email", { type: "server", message: result.fields.email });
             if (result.fields.whatsappNumber) form.setError("whatsappNumber", { type: "server", message: result.fields.whatsappNumber });
         }
-        // If submission failed, revert to latest server slots or passed initialSlots if updatedSlots not in result
         const latestSlots = result.updatedSlots || await fetchCurrentFacultySlots();
         setCurrentFacultySlots(latestSlots);
       }
@@ -146,62 +161,93 @@ export default function FacultyConnectClient({
 
       <Form {...form}>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-            <StudentInfoForm control={control} isSubmitted={isSubmitted} formFields={formState?.fields} />
-            <FacultySelectionList
-              subjects={initialSubjects}
-              allFaculties={initialFaculties}
-              facultySlots={currentFacultySlots} // Pass composite-key slots
-              control={control}
-              isSubmitted={isSubmitted}
-              onFacultySelectionChange={handleFacultySelectionChange}
-            />
-          </div>
+          {currentStep === 1 && (
+            <div className="flex flex-col items-center">
+              <div className="w-full max-w-2xl">
+                <StudentInfoForm control={control} isSubmitted={isSubmitted} formFields={formState?.fields} />
+              </div>
+              <div className="flex justify-end mt-8 w-full max-w-2xl">
+                <Button 
+                  type="button" 
+                  onClick={handleNextStep} 
+                  disabled={isPending || isSubmitted} 
+                  className="text-lg py-3 px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform transform hover:scale-105"
+                >
+                  Next <ArrowRight className="ml-2 h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+          )}
 
-          {formState && !formState.success && formState.message && (
-             <Alert variant="destructive" className="mt-6">
-               <Info className="h-4 w-4" />
-               <AlertTitle>Error</AlertTitle>
-               <AlertDescription>{formState.message}</AlertDescription>
-               {formState.issues && (
-                 <ul className="list-disc list-inside mt-2">
-                   {formState.issues.map((issue, idx) => <li key={idx}>{issue}</li>)}
-                 </ul>
+          {currentStep === 2 && (
+            <div className="flex flex-col items-center">
+               <div className="w-full max-w-3xl"> {/* Wider for faculty list */}
+                <FacultySelectionList
+                  subjects={initialSubjects}
+                  allFaculties={initialFaculties}
+                  facultySlots={currentFacultySlots}
+                  control={control}
+                  isSubmitted={isSubmitted}
+                  onFacultySelectionChange={handleFacultySelectionChange}
+                />
+              </div>
+
+              {formState && !formState.success && formState.message && (
+                 <Alert variant="destructive" className="mt-6 w-full max-w-3xl">
+                   <Info className="h-4 w-4" />
+                   <AlertTitle>Error</AlertTitle>
+                   <AlertDescription>{formState.message}</AlertDescription>
+                   {formState.issues && (
+                     <ul className="list-disc list-inside mt-2">
+                       {formState.issues.map((issue, idx) => <li key={idx}>{issue}</li>)}
+                     </ul>
+                   )}
+                 </Alert>
                )}
-             </Alert>
-           )}
-           {formState && formState.success && (
-             <Alert variant="default" className="mt-6 bg-primary/10 border-primary/30 text-primary-dark">
-               <CheckCircle className="h-4 w-4 text-primary" />
-               <AlertTitle className="text-primary">Success!</AlertTitle>
-               <AlertDescription className="text-primary">
-                 {formState.message}
-               </AlertDescription>
-             </Alert>
-           )}
-          
-          <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-10 pt-6 border-t">
-            {!isSubmitted ? (
-              <Button 
-                type="submit" 
-                disabled={isPending || isSubmitted} 
-                className="w-full sm:w-auto text-lg py-3 px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform transform hover:scale-105"
-                aria-label="Submit Selections"
-              >
-                {isPending ? (
-                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                ) : (
-                  <Send className="mr-2 h-5 w-5" />
+               {formState && formState.success && (
+                 <Alert variant="default" className="mt-6 bg-primary/10 border-primary/30 text-primary-dark w-full max-w-3xl">
+                   <CheckCircle className="h-4 w-4 text-primary" />
+                   <AlertTitle className="text-primary">Success!</AlertTitle>
+                   <AlertDescription className="text-primary">
+                     {formState.message}
+                   </AlertDescription>
+                 </Alert>
+               )}
+              
+              <div className="flex flex-col sm:flex-row justify-center items-center gap-4 mt-10 pt-6 border-t w-full max-w-3xl">
+                {!isSubmitted && (
+                   <Button 
+                    type="button" 
+                    onClick={() => setCurrentStep(1)} 
+                    variant="outline" 
+                    disabled={isPending} 
+                    className="w-full sm:w-auto text-lg py-3 px-8"
+                  >
+                    <ArrowLeft className="mr-2 h-5 w-5" /> Previous
+                  </Button>
                 )}
-                Submit Selections
-              </Button>
-            ) : (
-              <p className="text-lg text-green-600 font-semibold flex items-center">
-                <CheckCircle className="mr-2 h-6 w-6" /> Your selections have been submitted!
-              </p>
-            )}
-            
-          </div>
+                {!isSubmitted ? (
+                  <Button 
+                    type="submit" 
+                    disabled={isPending || isSubmitted} 
+                    className="w-full sm:w-auto text-lg py-3 px-8 bg-primary hover:bg-primary/90 text-primary-foreground shadow-md transition-transform transform hover:scale-105"
+                    aria-label="Submit Selections"
+                  >
+                    {isPending ? (
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    ) : (
+                      <Send className="mr-2 h-5 w-5" />
+                    )}
+                    Submit Selections
+                  </Button>
+                ) : (
+                  <p className="text-lg text-green-600 font-semibold flex items-center">
+                    <CheckCircle className="mr-2 h-6 w-6" /> Your selections have been submitted!
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
         </form>
       </Form>
       <ScalabilityGuidance />
