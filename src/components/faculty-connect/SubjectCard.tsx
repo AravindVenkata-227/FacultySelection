@@ -1,6 +1,7 @@
+
 'use client';
 
-import type { Control, FieldValues } from 'react-hook-form';
+import type { Control } from 'react-hook-form';
 import { Controller } from 'react-hook-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -16,9 +17,17 @@ interface SubjectCardProps {
   facultySlots: Record<string, number>;
   control: Control<FacultyConnectFormValues>;
   isSubmitted: boolean;
+  onFacultySelectionChange: (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => void;
 }
 
-export function SubjectCard({ subject, allFaculties, facultySlots, control, isSubmitted }: SubjectCardProps) {
+export function SubjectCard({ 
+  subject, 
+  allFaculties, 
+  facultySlots, 
+  control, 
+  isSubmitted,
+  onFacultySelectionChange 
+}: SubjectCardProps) {
   const facultyDetails = (facultyId: string) => {
     return allFaculties.find(f => f.id === facultyId);
   };
@@ -41,8 +50,14 @@ export function SubjectCard({ subject, allFaculties, facultySlots, control, isSu
               <FormLabel className="sr-only">Select Faculty for {subject.name}</FormLabel>
               <FormControl>
                 <RadioGroup
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
+                  onValueChange={(newFacultyId) => {
+                    const oldFacultyId = field.value;
+                    field.onChange(newFacultyId); // Update form state
+                    if (!isSubmitted) { // Only update slots if form is not yet submitted
+                       onFacultySelectionChange(subject.id, newFacultyId, oldFacultyId);
+                    }
+                  }}
+                  value={field.value || ''} // Ensure value is controlled
                   className="flex flex-col space-y-2"
                   disabled={isSubmitted}
                 >
@@ -50,18 +65,29 @@ export function SubjectCard({ subject, allFaculties, facultySlots, control, isSu
                     const faculty = facultyDetails(facultyId);
                     if (!faculty) return null;
                     const slots = facultySlots[facultyId] ?? faculty.initialSlots;
+                    // Disable if 0 slots UNLESS it's the currently selected one (to allow changing away)
                     const isDisabled = slots === 0 && field.value !== facultyId;
 
                     return (
                       <FormItem 
                         key={faculty.id} 
-                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        onClick={() => !isDisabled && !isSubmitted && field.onChange(faculty.id)}
+                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${isDisabled && !isSubmitted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        onClick={() => {
+                          if (!isDisabled && !isSubmitted && field.value !== facultyId) {
+                            const oldValue = field.value;
+                            field.onChange(faculty.id);
+                            onFacultySelectionChange(subject.id, faculty.id, oldValue);
+                          }
+                        }}
                       >
                         <FormControl>
-                           <RadioGroupItem value={faculty.id} disabled={isDisabled || isSubmitted} id={`${subject.id}-${faculty.id}`} />
+                           <RadioGroupItem 
+                             value={faculty.id} 
+                             disabled={isDisabled || isSubmitted} 
+                             id={`${subject.id}-${faculty.id}`} 
+                           />
                         </FormControl>
-                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${isDisabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${(isDisabled && !isSubmitted) ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
                           <div className="flex justify-between items-center">
                             <span className="flex items-center">
                               <Users className="mr-2 h-5 w-5 text-secondary-foreground" />

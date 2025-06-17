@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Control } from 'react-hook-form';
@@ -13,6 +14,7 @@ interface FacultySelectionListProps {
   facultySlots: Record<string, number>;
   control: Control<FacultyConnectFormValues>;
   isSubmitted: boolean;
+  onFacultySelectionChange: (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => void;
 }
 
 export function FacultySelectionList({
@@ -21,6 +23,7 @@ export function FacultySelectionList({
   facultySlots,
   control,
   isSubmitted,
+  onFacultySelectionChange,
 }: FacultySelectionListProps) {
   if (!subjects || subjects.length === 0) {
     return <p>No subjects available for selection.</p>;
@@ -43,6 +46,7 @@ export function FacultySelectionList({
                 facultySlots={facultySlots}
                 control={control}
                 isSubmitted={isSubmitted}
+                onFacultySelectionChange={onFacultySelectionChange}
               />
             ))}
           </div>

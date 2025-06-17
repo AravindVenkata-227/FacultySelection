@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -52,6 +53,28 @@ export default function FacultyConnectClient({
 
   const { control, handleSubmit, reset, formState: { errors: clientErrors } } = form;
 
+  const handleFacultySelectionChange = (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => {
+    setCurrentFacultySlots(prevSlots => {
+      const updatedSlots = { ...prevSlots };
+      const oldFacultyDetail = oldFacultyId ? initialFaculties.find(f => f.id === oldFacultyId) : undefined;
+
+      if (oldFacultyId && oldFacultyId !== newFacultyId && oldFacultyDetail) {
+        // Increment slot for the old faculty, ensuring it doesn't exceed initial capacity
+        if (updatedSlots[oldFacultyId] < oldFacultyDetail.initialSlots) {
+           updatedSlots[oldFacultyId] = (updatedSlots[oldFacultyId] || 0) + 1;
+        }
+      }
+      
+      // Decrement slot for the new faculty
+      if (newFacultyId && newFacultyId !== oldFacultyId) {
+        if (updatedSlots[newFacultyId] > 0) {
+          updatedSlots[newFacultyId] = (updatedSlots[newFacultyId] || 0) - 1;
+        }
+      }
+      return updatedSlots;
+    });
+  };
+
   const onSubmit = (data: FacultyConnectFormValues) => {
     startTransition(async () => {
       const formData = new FormData();
@@ -74,6 +97,7 @@ export default function FacultyConnectClient({
           duration: 5000,
         });
         setIsSubmitted(true);
+        // Ensure final slots are accurate from server after submission
         if (result.updatedSlots) {
           setCurrentFacultySlots(result.updatedSlots);
         }
@@ -89,7 +113,8 @@ export default function FacultyConnectClient({
             if (result.fields.rollNumber) form.setError("rollNumber", { type: "server", message: result.fields.rollNumber });
             if (result.fields.name) form.setError("name", { type: "server", message: result.fields.name });
         }
-        // If selections caused the issue, update slots to reflect current state
+        // If selections caused the issue, update slots to reflect current server state
+        // This also implicitly reverts any optimistic client-side changes if submission fails.
         const latestSlots = await fetchCurrentFacultySlots();
         setCurrentFacultySlots(latestSlots);
       }
@@ -98,8 +123,8 @@ export default function FacultyConnectClient({
 
   const handleResetForm = async () => {
     startTransition(async () => {
-      await resetAllFacultySlots();
-      const latestSlots = await fetchCurrentFacultySlots();
+      await resetAllFacultySlots(); // Resets on the server
+      const latestSlots = await fetchCurrentFacultySlots(); // Fetches fresh state
       setCurrentFacultySlots(latestSlots);
       reset({
         ...defaultFormValues,
@@ -142,6 +167,7 @@ export default function FacultyConnectClient({
               facultySlots={currentFacultySlots}
               control={control}
               isSubmitted={isSubmitted}
+              onFacultySelectionChange={handleFacultySelectionChange}
             />
           </div>
 
