@@ -2,7 +2,7 @@
 export interface Faculty {
   id: string;
   name: string;
-  initialSlots: number;
+  initialSlots: number; // This will represent initial slots for the specific subject they teach
 }
 
 export interface Subject {
@@ -12,49 +12,69 @@ export interface Subject {
 }
 
 const _faculties: Faculty[] = [
-  { id: 'f1', name: 'Dr. Eleanor Vance', initialSlots: 72 },
-  { id: 'f2', name: 'Prof. Samuel Green', initialSlots: 72 },
-  { id: 'f3', name: 'Dr. Olivia Chen', initialSlots: 72 },
+  // AI Faculty
+  { id: 'f1', name: 'Dr. V N V Satya Prakash (ECE)', initialSlots: 72 },
+  { id: 'f2', name: 'Mr. T. Raghavendra (CE)', initialSlots: 72 },
+  { id: 'f3', name: 'Mrs. S. Rubiya Parveen', initialSlots: 72 },
+  // CS Faculty
+  { id: 'f4', name: 'Dr. P. Sreedevi', initialSlots: 72 },
+  { id: 'f5', name: 'Dr. N. Ramanjaneya Reddy', initialSlots: 72 },
+  { id: 'f6', name: 'Mr. K. Vishwanath', initialSlots: 72 },
+  // LSA Faculty
+  { id: 'f7', name: 'Dr. K. Nageswara Reddy', initialSlots: 72 },
+  { id: 'f8', name: 'Mr. B. Rameswara Reddy', initialSlots: 72 },
+  { id: 'f9', name: 'Mr. L. Bhavani Sankar', initialSlots: 72 },
+  // OOAD Faculty
+  { id: 'f10', name: 'Mrs. D. Sravanthi', initialSlots: 72 },
+  { id: 'f11', name: 'Mr. B. V. Chandra Sekhar', initialSlots: 72 },
+  { id: 'f12', name: 'Mr. A. Ramesh', initialSlots: 72 },
+  // MS Faculty
+  { id: 'f13', name: 'Mr. K. Ramakrishna (MBA)', initialSlots: 72 },
+  { id: 'f14', name: 'Mrs. Shahin (MBA)', initialSlots: 72 },
+  { id: 'f15', name: 'Dr. N. Rajasekhar (MBA)', initialSlots: 72 },
+  // BCT Faculty
+  { id: 'f16', name: 'Mr. G. Rajasekhar Reddy', initialSlots: 72 },
+  { id: 'f17', name: 'Mr. E. Narasimhulu (EEE)', initialSlots: 72 },
+  { id: 'f18', name: 'Mr. J. Nagarjuna Reddy (EEE)', initialSlots: 72 },
 ];
 
 const _subjects: Subject[] = [
-  { id: 's1', name: 'Advanced Quantum Physics', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's2', name: 'Organic Chemistry Symphony', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's3', name: 'Computational Linguistics', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's4', name: 'Ancient Civilizations & Mythology', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's5', name: 'Modern Political Theory', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's6', name: 'Astrobiology Fundamentals', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's1', name: 'AI', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's2', name: 'CS', facultyOptions: ['f4', 'f5', 'f6'] },
+  { id: 's3', name: 'LSA', facultyOptions: ['f7', 'f8', 'f9'] },
+  { id: 's4', name: 'OOAD', facultyOptions: ['f10', 'f11', 'f12'] },
+  { id: 's5', name: 'MS', facultyOptions: ['f13', 'f14', 'f15'] },
+  { id: 's6', name: 'BCT', facultyOptions: ['f16', 'f17', 'f18'] },
 ];
 
-let facultySlotsData: Record<string, number> = {};
+let facultySlotsData: Record<string, number> = {}; // Key: `${facultyId}_${subjectId}`
 let dataInitialized = false;
 
 const initializeDataStore = () => {
   if (dataInitialized) {
-    // A simple check: if the number of faculties or subjects changes, re-initialize.
-    // This is a basic way to handle potential structural changes during development.
     let expectedKeysCount = 0;
     _subjects.forEach(subject => {
         subject.facultyOptions.forEach(facultyId => {
+            // Ensure the faculty is actually in the _faculties list
             if (_faculties.some(f => f.id === facultyId)) {
                 expectedKeysCount++;
             }
         });
     });
-    if (Object.keys(facultySlotsData).length === expectedKeysCount) {
-        return; // Assume data is fine if key count matches expected.
+    if (Object.keys(facultySlotsData).length === expectedKeysCount &&
+        _faculties.every(f => _subjects.some(s => s.facultyOptions.includes(f.id) && facultySlotsData[`${f.id}_${s.id}`] !== undefined))) {
+        return; 
     }
-    // If key count mismatch, means structure might have changed, so re-initialize.
-    console.log('Re-initializing data store due to potential structure change.');
+    console.log('Re-initializing data store due to potential structure change or mismatch.');
   }
 
-  facultySlotsData = {}; 
-   _faculties.forEach(faculty => {
-    _subjects.forEach(subject => {
-      // Only create slot entries if the faculty is listed as an option for the subject
-      if (subject.facultyOptions.includes(faculty.id)) {
+  facultySlotsData = {};
+  _subjects.forEach(subject => {
+    subject.facultyOptions.forEach(facultyId => {
+      const faculty = _faculties.find(f => f.id === facultyId);
+      if (faculty) { // Ensure faculty exists
         const key = `${faculty.id}_${subject.id}`;
-        facultySlotsData[key] = faculty.initialSlots;
+        facultySlotsData[key] = faculty.initialSlots; // Each faculty has distinct slots for the subject they teach
       }
     });
   });
@@ -91,28 +111,19 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
 }
 
 export function updateFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
-  initializeDataStore(); // Ensure data is initialized before trying to update
+  initializeDataStore(); 
   const key = `${facultyId}_${subjectId}`;
   
-  if (facultySlotsData[key] === undefined) {
-    // This check is important. If a facultyId_subjectId key doesn't exist,
-    // it means either the faculty isn't assigned to the subject or data isn't initialized correctly.
-    const facultyExists = _faculties.some(f => f.id === facultyId);
-    const subjectExists = _subjects.some(s => s.id === subjectId);
-    const facultyTeachesSubject = _subjects.find(s => s.id === subjectId)?.facultyOptions.includes(facultyId);
+  const faculty = _faculties.find(f => f.id === facultyId);
+  const subject = _subjects.find(s => s.id === subjectId);
 
-    if (!facultyExists || !subjectExists || !facultyTeachesSubject) {
-         return { success: false, error: 'Faculty not assigned to this subject or invalid IDs.' };
-    }
-    // If IDs are valid but key is missing, it implies an initialization issue (should be caught by initializeDataStore)
-    // or an attempt to select a faculty for a subject they don't teach (should be caught by UI ideally).
-    // For robustness, if the key is missing but should exist, initialize it.
-    // This scenario should be rare if initializeDataStore is robust and UI is correct.
-    console.warn(`Slot key ${key} was undefined. Re-checking initialization.`);
-    initializeDataStore(); // Attempt to re-initialize if it seems off
-    if (facultySlotsData[key] === undefined) {
-       return { success: false, error: 'Slot data missing even after re-check. Faculty might not be configured for this subject.' };
-    }
+  if (!faculty || !subject || !subject.facultyOptions.includes(facultyId)) {
+     return { success: false, error: 'Faculty not assigned to this subject or invalid IDs.' };
+  }
+
+  if (facultySlotsData[key] === undefined) {
+    console.warn(`Slot key ${key} was undefined despite valid faculty/subject. Initializing it.`);
+    facultySlotsData[key] = faculty.initialSlots; // Initialize if somehow missed
   }
 
   if (facultySlotsData[key] > 0) {
