@@ -6,7 +6,6 @@ import { SubjectCard } from './SubjectCard';
 import type { Subject, Faculty } from '@/lib/data';
 import type { FacultyConnectFormValues } from '@/lib/schema';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface FacultySelectionListProps {
   subjects: Subject[];
@@ -36,22 +35,21 @@ export function FacultySelectionList({
         <CardDescription>Choose your preferred faculty for each subject below. Slots are limited.</CardDescription>
       </CardHeader>
       <CardContent>
-        <ScrollArea className="h-[calc(100vh-450px)] sm:h-[calc(100vh-400px)] pr-4"> {/* Adjust height as needed */}
-          <div className="space-y-6">
-            {subjects.map((subject) => (
-              <SubjectCard
-                key={subject.id}
-                subject={subject}
-                allFaculties={allFaculties}
-                facultySlots={facultySlots} // Pass composite-key slots
-                control={control}
-                isSubmitted={isSubmitted}
-                onFacultySelectionChange={onFacultySelectionChange}
-              />
-            ))}
-          </div>
-        </ScrollArea>
+        <div className="space-y-6">
+          {subjects.map((subject) => (
+            <SubjectCard
+              key={subject.id}
+              subject={subject}
+              allFaculties={allFaculties}
+              facultySlots={facultySlots} // Pass composite-key slots
+              control={control}
+              isSubmitted={isSubmitted}
+              onFacultySelectionChange={onFacultySelectionChange}
+            />
+          ))}
+        </div>
       </CardContent>
     </Card>
   );
 }
+
