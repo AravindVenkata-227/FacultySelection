@@ -12,9 +12,9 @@ export interface Subject {
 }
 
 const _faculties: Faculty[] = [
-  { id: 'f1', name: 'Dr. Eleanor Vance', initialSlots: 90 },
-  { id: 'f2', name: 'Prof. Samuel Green', initialSlots: 90 },
-  { id: 'f3', name: 'Dr. Olivia Chen', initialSlots: 90 },
+  { id: 'f1', name: 'Dr. Eleanor Vance', initialSlots: 72 },
+  { id: 'f2', name: 'Prof. Samuel Green', initialSlots: 72 },
+  { id: 'f3', name: 'Dr. Olivia Chen', initialSlots: 72 },
 ];
 
 const _subjects: Subject[] = [
@@ -34,12 +34,13 @@ let dataInitialized = false;
 const initializeDataStore = () => {
   if (dataInitialized && Object.keys(facultySlotsData).length > 0 &&
       Object.keys(facultySlotsData).length === _faculties.length &&
-      _faculties.every(f => facultySlotsData[f.id] !== undefined)) {
-    // Basic check to see if it might be already initialized with current faculty set
+      _faculties.every(f => facultySlotsData[f.id] !== undefined && facultySlotsData[f.id] === f.initialSlots)) {
+    // Basic check to see if it might be already initialized with current faculty set and slots
+    // This check also ensures if initialSlots changed, it re-initializes
     return;
   }
 
-  facultySlotsData = {}; // Clear previous data if faculties changed
+  facultySlotsData = {}; // Clear previous data if faculties or initialSlots changed
   _faculties.forEach(faculty => {
     facultySlotsData[faculty.id] = faculty.initialSlots;
   });
@@ -92,3 +93,4 @@ export async function resetAllFacultySlots(): Promise<void> {
     dataInitialized = true; // Ensure it's marked as initialized
     console.log('Faculty slots reset to:', facultySlotsData);
 }
+
