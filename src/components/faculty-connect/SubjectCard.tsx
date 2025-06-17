@@ -66,24 +66,24 @@ export function SubjectCard({
                     if (!faculty) return null;
 
                     const slotKey = `${faculty.id}_${subject.id}`;
-                    // Use faculty.initialSlots as fallback if key not found, though it should be initialized.
                     const slots = facultySlots[slotKey] ?? faculty.initialSlots; 
                     
-                    const isDisabled = slots === 0 && field.value !== faculty.id;
+                    // Disable if slots are 0 AND it's not the currently selected faculty for this subject
+                    const isOptionDisabled = slots === 0 && field.value !== faculty.id;
 
                     return (
                       <FormItem 
                         key={faculty.id} 
-                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${isDisabled && !isSubmitted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${(isOptionDisabled && !isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
                         <FormControl>
                            <RadioGroupItem 
                              value={faculty.id} 
-                             disabled={isDisabled || isSubmitted} 
+                             disabled={isOptionDisabled || isSubmitted} 
                              id={`${subject.id}-${faculty.id}`} 
                            />
                         </FormControl>
-                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${(isDisabled && !isSubmitted) ? 'cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${(isOptionDisabled && !isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                           <div className="flex justify-between items-center">
                             <span className="flex items-center">
                               <Users className="mr-2 h-5 w-5 text-secondary-foreground" />
