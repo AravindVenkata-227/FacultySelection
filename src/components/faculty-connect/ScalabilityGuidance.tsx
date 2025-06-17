@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -38,23 +39,20 @@ export function ScalabilityGuidance() {
   };
 
   useEffect(() => {
+    // If the button is removed, this dialog might never open unless triggered by another means.
+    // For now, keeping the logic in case the dialog is triggered programmatically elsewhere.
     if (isOpen && !guidance && !isLoading) {
       fetchGuidance();
     }
   }, [isOpen, guidance, isLoading]);
 
+  // The button to trigger the dialog has been removed as per user request.
+  // The Dialog component itself is kept in case it's intended to be triggered by other means.
+  // If the entire feature (dialog included) is to be removed, this component can be further simplified or removed.
+
   return (
     <>
-      <Button
-        variant="outline"
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-4 right-4 shadow-lg hover:bg-accent hover:text-accent-foreground transition-colors duration-200"
-        aria-label="Get Scaling Guidance"
-      >
-        <Lightbulb className="mr-2 h-5 w-5" />
-        Scaling Guidance
-      </Button>
-
+      {/* Button previously here was removed. */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent className="sm:max-w-[600px] md:max-w-[750px] lg:max-w-[900px] max-h-[90vh] flex flex-col">
           <DialogHeader>
@@ -104,3 +102,4 @@ export function ScalabilityGuidance() {
     </>
   );
 }
+
