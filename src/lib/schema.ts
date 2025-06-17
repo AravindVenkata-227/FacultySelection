@@ -3,7 +3,7 @@ import { z } from 'zod';
 export const studentInfoSchema = z.object({
   rollNumber: z.string()
     .min(1, "Roll number is required")
-    .regex(/^[A-Za-z]{2}\d{4}$/, "Invalid roll number format. Must be 2 letters followed by 4 numbers (e.g., AA1234)."),
+    .regex(/^2[0-3]09[15]A05[0-9A-K][0-9]$/, "Invalid roll number format."),
   name: z.string().min(2, "Name must be at least 2 characters long.").max(100, "Name must be less than 100 characters."),
 });
 
@@ -31,3 +31,4 @@ export const submissionSchema = z.object({
 });
 
 export type SubmissionPayload = z.infer<typeof submissionSchema>;
+
