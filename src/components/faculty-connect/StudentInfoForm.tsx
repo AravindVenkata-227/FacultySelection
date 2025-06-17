@@ -5,14 +5,14 @@ import { Controller } from 'react-hook-form';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form'; // Assuming these are part of shadcn setup
+import { FormField, FormItem, FormLabel, FormControl, FormMessage } from '@/components/ui/form'; 
 import type { FacultyConnectFormValues } from '@/lib/schema';
-import { Fingerprint, User } from 'lucide-react';
+import { Fingerprint, User, Mail, Smartphone } from 'lucide-react';
 
 interface StudentInfoFormProps {
   control: Control<FacultyConnectFormValues>;
   isSubmitted: boolean;
-  formFields?: Record<string, string>; // For displaying server-side field errors
+  formFields?: Record<string, string>; 
 }
 
 export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInfoFormProps) {
@@ -35,7 +35,7 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
               <FormControl>
                 <Input
                   id="rollNumber"
-                  placeholder="e.g., AA1234"
+                  placeholder="e.g., 21091A05A0"
                   {...field}
                   disabled={isSubmitted}
                   aria-describedby="rollNumber-error"
@@ -69,6 +69,58 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
               </FormControl>
               <FormMessage id="name-error">
                 {error?.message || formFields?.name}
+              </FormMessage>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name="email"
+          render={({ field, fieldState: { error } }) => (
+            <FormItem>
+              <FormLabel htmlFor="email" className="flex items-center text-base">
+                <Mail className="mr-2 h-5 w-5 text-primary" />
+                Email ID
+              </FormLabel>
+              <FormControl>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="e.g., john.doe@example.com"
+                  {...field}
+                  disabled={isSubmitted}
+                  aria-describedby="email-error"
+                  className="text-base"
+                />
+              </FormControl>
+              <FormMessage id="email-error">
+                {error?.message || formFields?.email}
+              </FormMessage>
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={control}
+          name="whatsappNumber"
+          render={({ field, fieldState: { error } }) => (
+            <FormItem>
+              <FormLabel htmlFor="whatsappNumber" className="flex items-center text-base">
+                <Smartphone className="mr-2 h-5 w-5 text-primary" />
+                WhatsApp Number
+              </FormLabel>
+              <FormControl>
+                <Input
+                  id="whatsappNumber"
+                  type="tel"
+                  placeholder="e.g., +91 9876543210"
+                  {...field}
+                  disabled={isSubmitted}
+                  aria-describedby="whatsappNumber-error"
+                  className="text-base"
+                />
+              </FormControl>
+              <FormMessage id="whatsappNumber-error">
+                {error?.message || formFields?.whatsappNumber}
               </FormMessage>
             </FormItem>
           )}

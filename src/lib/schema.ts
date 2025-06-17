@@ -5,6 +5,11 @@ export const studentInfoSchema = z.object({
     .min(1, "Roll number is required")
     .regex(/^2[0-3]09[15]A05[0-9A-K][0-9]$/, "Invalid roll number format."),
   name: z.string().min(2, "Name must be at least 2 characters long.").max(100, "Name must be less than 100 characters."),
+  email: z.string().email({ message: "Invalid email address." }).min(1, "Email ID is required."),
+  whatsappNumber: z.string()
+    .min(10, "WhatsApp number must be at least 10 digits.")
+    .regex(/^[+]?[0-9\s-]{10,15}$/, { message: "Invalid WhatsApp number format. Use only numbers, spaces, or hyphens, optionally starting with +." })
+    .max(15, "WhatsApp number must be at most 15 characters."),
 });
 
 export type StudentInfo = z.infer<typeof studentInfoSchema>;
@@ -27,8 +32,9 @@ export type FacultyConnectFormValues = z.infer<typeof facultyConnectFormSchema>;
 export const submissionSchema = z.object({
   rollNumber: z.string(),
   name: z.string(),
+  email: z.string().email(),
+  whatsappNumber: z.string(),
   selections: z.array(facultySelectionEntrySchema),
 });
 
 export type SubmissionPayload = z.infer<typeof submissionSchema>;
-

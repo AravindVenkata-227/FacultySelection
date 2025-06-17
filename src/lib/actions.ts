@@ -36,14 +36,19 @@ export async function submitFacultySelection(
   const parsedStudentInfo = studentInfoSchema.safeParse({
     rollNumber: formValues.rollNumber,
     name: formValues.name,
+    email: formValues.email,
+    whatsappNumber: formValues.whatsappNumber,
   });
 
   if (!parsedStudentInfo.success) {
+    const fieldErrors = parsedStudentInfo.error.flatten().fieldErrors;
     return {
-      message: 'Invalid student information.',
+      message: 'Invalid student information. Please check the highlighted fields.',
       fields: {
-        rollNumber: parsedStudentInfo.error.flatten().fieldErrors.rollNumber?.join(', ') ?? '',
-        name: parsedStudentInfo.error.flatten().fieldErrors.name?.join(', ') ?? '',
+        rollNumber: fieldErrors.rollNumber?.join(', ') ?? '',
+        name: fieldErrors.name?.join(', ') ?? '',
+        email: fieldErrors.email?.join(', ') ?? '',
+        whatsappNumber: fieldErrors.whatsappNumber?.join(', ') ?? '',
       },
       success: false,
     };
@@ -93,23 +98,29 @@ export async function submitFacultySelection(
   
   const finalUpdatedSlots = await getFacultySlots(); 
 
-  // Append to Google Sheet after successful slot update
   try {
     const submissionTimestamp = new Date().toISOString();
     const studentRollNumber = validatedData.data.rollNumber;
     const studentName = validatedData.data.name;
+    const studentEmail = validatedData.data.email;
+    const studentWhatsApp = validatedData.data.whatsappNumber;
 
-    const sheetHeaders = ["Timestamp", "Roll Number", "Name"];
-    subjects.forEach(subject => sheetHeaders.push(subject.name)); // Subject names as headers
+    const sheetHeaders = ["Timestamp", "Roll Number", "Name", "Email ID", "WhatsApp Number"];
+    subjects.forEach(subject => sheetHeaders.push(subject.name)); 
 
-    const sheetRowData = [submissionTimestamp, studentRollNumber, studentName];
+    const sheetRowData: (string | number | boolean)[] = [
+        submissionTimestamp, 
+        studentRollNumber, 
+        studentName, 
+        studentEmail, 
+        studentWhatsApp
+    ];
     subjects.forEach(subject => {
       const selection = validatedData.data.selections.find(s => s.subjectId === subject.id);
       if (selection) {
         const faculty = allFaculties.find(f => f.id === selection.facultyId);
         sheetRowData.push(faculty ? faculty.name : 'N/A - Faculty ID not found');
       } else {
-        // This case should ideally be caught by earlier validation
         sheetRowData.push('Not Selected'); 
       }
     });
@@ -121,14 +132,12 @@ export async function submitFacultySelection(
         console.log('Submission data successfully written to Google Sheet.');
       } else {
         console.warn('Submission successful, but failed to write data to Google Sheet. Check service account permissions and SPREADSHEET_ID/SHEET_NAME.');
-        // Not failing the entire submission, but logging a warning.
       }
     } else {
       console.warn('Failed to ensure Google Sheet headers. Submission data not written to sheet.');
     }
   } catch (sheetError) {
     console.error('Error during Google Sheet operation:', sheetError);
-    // Log the error but don't fail the user's submission if other parts were successful.
   }
 
   console.log('Submission successful:', validatedData.data);

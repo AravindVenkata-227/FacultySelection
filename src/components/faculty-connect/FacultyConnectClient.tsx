@@ -25,6 +25,8 @@ interface FacultyConnectClientProps {
 const defaultFormValues: Partial<FacultyConnectFormValues> = {
   rollNumber: '',
   name: '',
+  email: '',
+  whatsappNumber: '',
   selections: {},
 };
 
@@ -86,6 +88,8 @@ export default function FacultyConnectClient({
       const formData = new FormData();
       formData.append('rollNumber', data.rollNumber);
       formData.append('name', data.name);
+      formData.append('email', data.email || '');
+      formData.append('whatsappNumber', data.whatsappNumber || '');
       Object.entries(data.selections).forEach(([subjectId, facultyId]) => {
         if (facultyId) {
           formData.append(`selections.${subjectId}`, facultyId);
@@ -116,6 +120,8 @@ export default function FacultyConnectClient({
         if (result.fields) {
             if (result.fields.rollNumber) form.setError("rollNumber", { type: "server", message: result.fields.rollNumber });
             if (result.fields.name) form.setError("name", { type: "server", message: result.fields.name });
+            if (result.fields.email) form.setError("email", { type: "server", message: result.fields.email });
+            if (result.fields.whatsappNumber) form.setError("whatsappNumber", { type: "server", message: result.fields.whatsappNumber });
         }
         // If submission failed, revert to latest server slots or passed initialSlots if updatedSlots not in result
         const latestSlots = result.updatedSlots || await fetchCurrentFacultySlots();
@@ -194,7 +200,7 @@ export default function FacultyConnectClient({
                 <CheckCircle className="mr-2 h-6 w-6" /> Your selections have been submitted!
               </p>
             )}
-            {/* Reset button was here and has been removed */}
+            
           </div>
         </form>
       </Form>
