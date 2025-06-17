@@ -39,7 +39,7 @@ const _faculties: Faculty[] = [
 ];
 
 const _subjects: Subject[] = [
-  { id: 's1', name: 'AI', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's1', name: 'Artificial Intelligence (AI)', facultyOptions: ['f1', 'f2', 'f3'] },
   { id: 's2', name: 'CS', facultyOptions: ['f4', 'f5', 'f6'] },
   { id: 's3', name: 'LSA', facultyOptions: ['f7', 'f8', 'f9'] },
   { id: 's4', name: 'OOAD', facultyOptions: ['f10', 'f11', 'f12'] },
@@ -138,3 +138,4 @@ export async function resetAllFacultySlots(): Promise<void> {
   initializeDataStore();
   console.log('Faculty slots reset (per-subject) to:', facultySlotsData);
 }
+
