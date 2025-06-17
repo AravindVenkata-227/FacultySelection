@@ -1,0 +1,132 @@
+'use server';
+
+import { z } from 'zod';
+import { studentInfoSchema, submissionSchema, FacultyConnectFormValues } from './schema';
+import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData } from './data';
+import { getScalingGuidance as fetchScalingGuidance } from '@/ai/flows/scaling-guidance';
+import type { ScalingGuidanceOutput } from '@/ai/flows/scaling-guidance';
+
+export interface FormState {
+  message: string;
+  fields?: Record<string, string>;
+  issues?: string[];
+  success: boolean;
+  updatedSlots?: Record<string, number>;
+}
+
+export async function submitFacultySelection(
+  prevState: FormState | undefined,
+  formData: FormData
+): Promise<FormState> {
+  const subjects = await getSubjects();
+  const formValues: Record<string, any> = { selections: {} };
+
+  formData.forEach((value, key) => {
+    if (key.startsWith('selections.')) {
+      const subjectId = key.split('.')[1];
+      formValues.selections[subjectId] = value;
+    } else {
+      formValues[key] = value;
+    }
+  });
+  
+  const parsedStudentInfo = studentInfoSchema.safeParse({
+    rollNumber: formValues.rollNumber,
+    name: formValues.name,
+  });
+
+  if (!parsedStudentInfo.success) {
+    return {
+      message: 'Invalid student information.',
+      fields: {
+        rollNumber: parsedStudentInfo.error.flatten().fieldErrors.rollNumber?.join(', ') ?? '',
+        name: parsedStudentInfo.error.flatten().fieldErrors.name?.join(', ') ?? '',
+      },
+      success: false,
+    };
+  }
+
+  const selectionsArray = Object.entries(formValues.selections).map(([subjectId, facultyId]) => ({
+    subjectId,
+    facultyId: facultyId as string,
+  }));
+
+  // Validate all subjects have a selection
+  if (selectionsArray.length !== subjects.length) {
+     return { message: 'Please select a faculty for all subjects.', success: false };
+  }
+  for (const subject of subjects) {
+    if (!formValues.selections[subject.id] || formValues.selections[subject.id] === '') {
+      return { message: `Faculty selection is missing for ${subject.name}.`, success: false };
+    }
+  }
+  
+  const finalPayload = {
+    ...parsedStudentInfo.data,
+    selections: selectionsArray,
+  };
+  
+  const validatedData = submissionSchema.safeParse(finalPayload);
+
+  if (!validatedData.success) {
+    return {
+      message: 'Invalid submission data. Please check your selections.',
+      issues: validatedData.error.flatten().formErrors,
+      success: false,
+    };
+  }
+
+  // Attempt to update slots (simulated critical section)
+  const updatedSlotsAttempt: Record<string, number> = {};
+  const originalSlots = await getFacultySlots(); // Get current slots before attempting update
+
+  for (const selection of validatedData.data.selections) {
+    const result = updateFacultySlotSync(selection.facultyId);
+    if (!result.success) {
+      // Rollback: For this demo, we'll just return an error. A real app would need transactions.
+      // For now, we don't actually revert, just signal failure. A "reset" might be needed for true demo.
+      return {
+        message: `Failed to secure slot for faculty for subject ${subjects.find(s=>s.id === selection.subjectId)?.name}. ${result.error}`,
+        success: false,
+        updatedSlots: originalSlots, // return original slots on failure
+      };
+    }
+    if (result.currentSlots !== undefined) {
+       updatedSlotsAttempt[selection.facultyId] = result.currentSlots;
+    }
+  }
+  
+  // If all slots updated successfully
+  console.log('Submission successful:', validatedData.data);
+  const finalUpdatedSlots = await getFacultySlots(); // Fetch the actual current state of slots
+
+  return {
+    message: `Thank you, ${validatedData.data.name}! Your faculty selections have been submitted successfully.`,
+    success: true,
+    updatedSlots: finalUpdatedSlots,
+  };
+}
+
+export async function getAIScalingGuidance(): Promise<ScalingGuidanceOutput> {
+  try {
+    const guidance = await fetchScalingGuidance({});
+    return guidance;
+  } catch (error) {
+    console.error("Error fetching scaling guidance:", error);
+    return { recommendations: "Could not retrieve scaling guidance at this time. Please try again later." };
+  }
+}
+
+export async function fetchCurrentFacultySlots(): Promise<Record<string, number>> {
+  return getFacultySlots();
+}
+
+export async function resetAllFacultySlots(): Promise<{success: boolean, message: string}> {
+    try {
+        await resetSlotsData();
+        return { success: true, message: "All faculty slots have been reset to their initial values." };
+    } catch (error) {
+        console.error("Error resetting faculty slots:", error);
+        return { success: false, message: "Failed to reset faculty slots." };
+    }
+}
