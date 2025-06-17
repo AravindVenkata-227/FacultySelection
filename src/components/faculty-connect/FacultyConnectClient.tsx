@@ -67,6 +67,10 @@ export default function FacultyConnectClient({
   const { control, handleSubmit, reset, formState: { errors: clientErrors }, trigger, getValues } = form;
 
   useEffect(() => {
+    // Clear the stored submission on component mount to allow re-testing when server data is reset.
+    // For a production scenario, you might remove this line or have a more specific condition.
+    localStorage.removeItem(LOCAL_STORAGE_KEY); 
+
     const storedSubmission = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (storedSubmission) {
       try {
