@@ -72,13 +72,6 @@ export function SubjectCard({
                       <FormItem 
                         key={faculty.id} 
                         className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${isDisabled && !isSubmitted ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                        onClick={() => {
-                          if (!isDisabled && !isSubmitted && field.value !== facultyId) {
-                            const oldValue = field.value;
-                            field.onChange(faculty.id);
-                            onFacultySelectionChange(subject.id, faculty.id, oldValue);
-                          }
-                        }}
                       >
                         <FormControl>
                            <RadioGroupItem 
