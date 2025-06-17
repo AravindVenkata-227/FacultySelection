@@ -1,3 +1,4 @@
+
 import FacultyConnectClient from '@/components/faculty-connect/FacultyConnectClient';
 import { getSubjects, getFaculties, getFacultySlots, resetAllFacultySlots } from '@/lib/data';
 
@@ -8,6 +9,7 @@ export default async function Home() {
 
   const subjects = await getSubjects();
   const faculties = await getFaculties();
+  // initialFacultySlots will now have keys like "facultyId_subjectId"
   const initialFacultySlots = await getFacultySlots();
 
   return (

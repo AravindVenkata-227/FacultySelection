@@ -19,7 +19,7 @@ import { CheckCircle, Send, Info, Loader2, RotateCcw } from 'lucide-react';
 interface FacultyConnectClientProps {
   initialSubjects: Subject[];
   initialFaculties: Faculty[];
-  initialSlots: Record<string, number>;
+  initialSlots: Record<string, number>; // Key is `${facultyId}_${subjectId}`
 }
 
 const defaultFormValues: Partial<FacultyConnectFormValues> = {
@@ -37,6 +37,7 @@ export default function FacultyConnectClient({
   const { toast } = useToast();
   const [formState, setFormState] = useState<FormState | undefined>();
   const [isSubmitted, setIsSubmitted] = useState(false);
+  // currentFacultySlots keys are `${facultyId}_${subjectId}`
   const [currentFacultySlots, setCurrentFacultySlots] = useState<Record<string, number>>(initialSlots);
 
   const form = useForm<FacultyConnectFormValues>({
@@ -44,11 +45,11 @@ export default function FacultyConnectClient({
     defaultValues: {
       ...defaultFormValues,
       selections: initialSubjects.reduce((acc, subject) => {
-        acc[subject.id] = ''; // Initialize selections
+        acc[subject.id] = ''; 
         return acc;
       }, {} as Record<string, string>),
     },
-    mode: 'onChange', // Real-time validation for student info
+    mode: 'onChange', 
   });
 
   const { control, handleSubmit, reset, formState: { errors: clientErrors } } = form;
@@ -56,19 +57,24 @@ export default function FacultyConnectClient({
   const handleFacultySelectionChange = (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => {
     setCurrentFacultySlots(prevSlots => {
       const updatedSlots = { ...prevSlots };
-      const oldFacultyDetail = oldFacultyId ? initialFaculties.find(f => f.id === oldFacultyId) : undefined;
+      const facultyDetails = (facultyId: string) => initialFaculties.find(f => f.id === facultyId);
 
-      if (oldFacultyId && oldFacultyId !== newFacultyId && oldFacultyDetail) {
-        // Increment slot for the old faculty, ensuring it doesn't exceed initial capacity
-        if (updatedSlots[oldFacultyId] < oldFacultyDetail.initialSlots) {
-           updatedSlots[oldFacultyId] = (updatedSlots[oldFacultyId] || 0) + 1;
+      if (oldFacultyId && oldFacultyId !== newFacultyId) {
+        const oldFaculty = facultyDetails(oldFacultyId);
+        if (oldFaculty) {
+          const oldSlotKey = `${oldFacultyId}_${subjectId}`;
+          // Increment slot for the old faculty for this specific subject
+          if (updatedSlots[oldSlotKey] < oldFaculty.initialSlots) {
+             updatedSlots[oldSlotKey] = (updatedSlots[oldSlotKey] || 0) + 1;
+          }
         }
       }
       
-      // Decrement slot for the new faculty
       if (newFacultyId && newFacultyId !== oldFacultyId) {
-        if (updatedSlots[newFacultyId] > 0) {
-          updatedSlots[newFacultyId] = (updatedSlots[newFacultyId] || 0) - 1;
+        const newSlotKey = `${newFacultyId}_${subjectId}`;
+        // Decrement slot for the new faculty for this specific subject
+        if (updatedSlots[newSlotKey] > 0) {
+          updatedSlots[newSlotKey] = (updatedSlots[newSlotKey] || 0) - 1;
         }
       }
       return updatedSlots;
@@ -97,9 +103,8 @@ export default function FacultyConnectClient({
           duration: 5000,
         });
         setIsSubmitted(true);
-        // Ensure final slots are accurate from server after submission
         if (result.updatedSlots) {
-          setCurrentFacultySlots(result.updatedSlots);
+          setCurrentFacultySlots(result.updatedSlots); // Server provides authoritative slots
         }
       } else {
         toast({
@@ -108,14 +113,12 @@ export default function FacultyConnectClient({
           variant: 'destructive',
           duration: 5000,
         });
-        // If specific field errors are returned from server action
         if (result.fields) {
             if (result.fields.rollNumber) form.setError("rollNumber", { type: "server", message: result.fields.rollNumber });
             if (result.fields.name) form.setError("name", { type: "server", message: result.fields.name });
         }
-        // If selections caused the issue, update slots to reflect current server state
-        // This also implicitly reverts any optimistic client-side changes if submission fails.
-        const latestSlots = await fetchCurrentFacultySlots();
+        // If submission failed, revert to latest server slots or passed initialSlots if updatedSlots not in result
+        const latestSlots = result.updatedSlots || await fetchCurrentFacultySlots();
         setCurrentFacultySlots(latestSlots);
       }
     });
@@ -123,8 +126,8 @@ export default function FacultyConnectClient({
 
   const handleResetForm = async () => {
     startTransition(async () => {
-      await resetAllFacultySlots(); // Resets on the server
-      const latestSlots = await fetchCurrentFacultySlots(); // Fetches fresh state
+      await resetAllFacultySlots(); 
+      const latestSlots = await fetchCurrentFacultySlots(); 
       setCurrentFacultySlots(latestSlots);
       reset({
         ...defaultFormValues,
@@ -143,7 +146,6 @@ export default function FacultyConnectClient({
   };
   
   useEffect(() => {
-    // Initialize slots on mount if they weren't passed or are empty
     if (Object.keys(currentFacultySlots).length === 0 && Object.keys(initialSlots).length > 0) {
       setCurrentFacultySlots(initialSlots);
     }
@@ -164,7 +166,7 @@ export default function FacultyConnectClient({
             <FacultySelectionList
               subjects={initialSubjects}
               allFaculties={initialFaculties}
-              facultySlots={currentFacultySlots}
+              facultySlots={currentFacultySlots} // Pass composite-key slots
               control={control}
               isSubmitted={isSubmitted}
               onFacultySelectionChange={handleFacultySelectionChange}

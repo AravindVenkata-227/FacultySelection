@@ -14,7 +14,7 @@ import { LibraryBig, Users, Gauge } from 'lucide-react';
 interface SubjectCardProps {
   subject: Subject;
   allFaculties: Faculty[];
-  facultySlots: Record<string, number>;
+  facultySlots: Record<string, number>; // Key is `${facultyId}_${subjectId}`
   control: Control<FacultyConnectFormValues>;
   isSubmitted: boolean;
   onFacultySelectionChange: (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => void;
@@ -52,21 +52,24 @@ export function SubjectCard({
                 <RadioGroup
                   onValueChange={(newFacultyId) => {
                     const oldFacultyId = field.value;
-                    field.onChange(newFacultyId); // Update form state
-                    if (!isSubmitted) { // Only update slots if form is not yet submitted
+                    field.onChange(newFacultyId); 
+                    if (!isSubmitted) { 
                        onFacultySelectionChange(subject.id, newFacultyId, oldFacultyId);
                     }
                   }}
-                  value={field.value || ''} // Ensure value is controlled
+                  value={field.value || ''} 
                   className="flex flex-col space-y-2"
                   disabled={isSubmitted}
                 >
-                  {subject.facultyOptions.map((facultyId) => {
-                    const faculty = facultyDetails(facultyId);
+                  {subject.facultyOptions.map((facultyIdOption) => {
+                    const faculty = facultyDetails(facultyIdOption);
                     if (!faculty) return null;
-                    const slots = facultySlots[facultyId] ?? faculty.initialSlots;
-                    // Disable if 0 slots UNLESS it's the currently selected one (to allow changing away)
-                    const isDisabled = slots === 0 && field.value !== facultyId;
+
+                    const slotKey = `${faculty.id}_${subject.id}`;
+                    // Use faculty.initialSlots as fallback if key not found, though it should be initialized.
+                    const slots = facultySlots[slotKey] ?? faculty.initialSlots; 
+                    
+                    const isDisabled = slots === 0 && field.value !== faculty.id;
 
                     return (
                       <FormItem 

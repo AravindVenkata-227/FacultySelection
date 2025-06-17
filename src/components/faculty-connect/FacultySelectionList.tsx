@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 interface FacultySelectionListProps {
   subjects: Subject[];
   allFaculties: Faculty[];
-  facultySlots: Record<string, number>;
+  facultySlots: Record<string, number>; // Key is `${facultyId}_${subjectId}`
   control: Control<FacultyConnectFormValues>;
   isSubmitted: boolean;
   onFacultySelectionChange: (subjectId: string, newFacultyId: string, oldFacultyId: string | undefined | null) => void;
@@ -43,7 +43,7 @@ export function FacultySelectionList({
                 key={subject.id}
                 subject={subject}
                 allFaculties={allFaculties}
-                facultySlots={facultySlots}
+                facultySlots={facultySlots} // Pass composite-key slots
                 control={control}
                 isSubmitted={isSubmitted}
                 onFacultySelectionChange={onFacultySelectionChange}

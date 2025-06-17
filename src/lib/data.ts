@@ -26,33 +26,58 @@ const _subjects: Subject[] = [
   { id: 's6', name: 'Astrobiology Fundamentals', facultyOptions: ['f1', 'f2', 'f3'] },
 ];
 
-// In-memory store for slots - this is a simplification for demo purposes.
-// In a real app, this would be a database.
+// In-memory store for slots: key is `${facultyId}_${subjectId}`
 let facultySlotsData: Record<string, number> = {};
 let dataInitialized = false;
 
 const initializeDataStore = () => {
-  if (dataInitialized && Object.keys(facultySlotsData).length > 0 &&
-      Object.keys(facultySlotsData).length === _faculties.length &&
-      _faculties.every(f => facultySlotsData[f.id] !== undefined && facultySlotsData[f.id] === f.initialSlots)) {
-    // Basic check to see if it might be already initialized with current faculty set and slots
-    // This check also ensures if initialSlots changed, it re-initializes
+  // Re-initialize if not initialized or if the structure implies a reset is needed
+  // This is a simplified check for development; a real app might need more robust versioning or migration
+  const expectedKeysCount = _subjects.reduce((count, subject) => {
+    const teachingFaculty = _faculties.filter(f => subject.facultyOptions.includes(f.id));
+    return count + teachingFaculty.length;
+  }, 0);
+
+  if (dataInitialized && Object.keys(facultySlotsData).length === expectedKeysCount) {
+     // Basic check to see if it might be already initialized.
+     // More robust checks could verify specific keys or values if faculty/subject data changes frequently.
+    let allKeysMatchInitialValue = true;
+    for (const subject of _subjects) {
+        for (const facultyId of subject.facultyOptions) {
+            const faculty = _faculties.find(f => f.id === facultyId);
+            if (faculty) {
+                const key = `${faculty.id}_${subject.id}`;
+                if (facultySlotsData[key] !== faculty.initialSlots && facultySlotsData[key] !== undefined /* existing value may be less due to selections */) {
+                    // This part of the check is tricky as slots can be legitimately lower.
+                    // The primary goal is to ensure initialization if the set of keys changes.
+                }
+            }
+        }
+    }
+    // If the number of keys is right, assume it's initialized enough for demo.
+    // A full re-check of initial values for all keys might be too aggressive if slots are meant to persist.
+    // For now, if key count matches, we assume it's mostly fine. Reset is explicit.
     return;
   }
 
-  facultySlotsData = {}; // Clear previous data if faculties or initialSlots changed
-  _faculties.forEach(faculty => {
-    facultySlotsData[faculty.id] = faculty.initialSlots;
+  facultySlotsData = {}; // Clear previous data
+   _faculties.forEach(faculty => {
+    _subjects.forEach(subject => {
+      if (subject.facultyOptions.includes(faculty.id)) {
+        const key = `${faculty.id}_${subject.id}`;
+        facultySlotsData[key] = faculty.initialSlots;
+      }
+    });
   });
   dataInitialized = true;
+  console.log('Faculty slots initialized (per-subject):', facultySlotsData);
 };
 
-// Ensure data is initialized on module load or first call
 initializeDataStore();
 
 export async function getFaculties(): Promise<Faculty[]> {
-  initializeDataStore(); // Ensure data is initialized, especially if hot-reloading or server restarts.
-  return JSON.parse(JSON.stringify(_faculties)); // Return deep copy
+  initializeDataStore();
+  return JSON.parse(JSON.stringify(_faculties));
 }
 
 export async function getFacultyById(id: string): Promise<Faculty | undefined> {
@@ -62,35 +87,30 @@ export async function getFacultyById(id: string): Promise<Faculty | undefined> {
 
 export async function getSubjects(): Promise<Subject[]> {
   initializeDataStore();
-  return JSON.parse(JSON.stringify(_subjects)); // Return deep copy
+  return JSON.parse(JSON.stringify(_subjects));
 }
 
 export async function getFacultySlots(): Promise<Record<string, number>> {
-  initializeDataStore(); // Ensure data is initialized with the correct set of faculties
-  return JSON.parse(JSON.stringify(facultySlotsData)); // Return deep copy
+  initializeDataStore();
+  return JSON.parse(JSON.stringify(facultySlotsData));
 }
 
-// This function is for server actions to update slots.
-// It's synchronous as it modifies an in-memory object.
-export function updateFacultySlotSync(facultyId: string): { success: boolean; error?: string; currentSlots?: number } {
-  initializeDataStore(); // Ensure slots are loaded
-  if (facultySlotsData[facultyId] === undefined) {
-    return { success: false, error: 'Faculty not found.' };
+export function updateFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
+  initializeDataStore();
+  const key = `${facultyId}_${subjectId}`;
+  if (facultySlotsData[key] === undefined) {
+    return { success: false, error: 'Faculty not assigned to this subject or slot data missing.' };
   }
-  if (facultySlotsData[facultyId] > 0) {
-    facultySlotsData[facultyId]--;
-    return { success: true, currentSlots: facultySlotsData[facultyId] };
+  if (facultySlotsData[key] > 0) {
+    facultySlotsData[key]--;
+    return { success: true, currentSlots: facultySlotsData[key] };
   }
-  return { success: false, error: 'No slots available.', currentSlots: 0 };
+  return { success: false, error: 'No slots available for this faculty in this subject.', currentSlots: 0 };
 }
 
 export async function resetAllFacultySlots(): Promise<void> {
-    // Reset the slots data to initial values
-    facultySlotsData = {}; // Clear previous data
-    _faculties.forEach(faculty => {
-        facultySlotsData[faculty.id] = faculty.initialSlots;
-    });
-    dataInitialized = true; // Ensure it's marked as initialized
-    console.log('Faculty slots reset to:', facultySlotsData);
+  // Reset the slots data to initial values by re-running initialization
+  dataInitialized = false; // Force re-initialization
+  initializeDataStore();
+  console.log('Faculty slots reset (per-subject) to:', facultySlotsData);
 }
-

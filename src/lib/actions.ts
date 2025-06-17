@@ -1,8 +1,9 @@
+
 'use server';
 
 import { z } from 'zod';
 import { studentInfoSchema, submissionSchema, FacultyConnectFormValues } from './schema';
-import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData } from './data';
+import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData, getFaculties } from './data';
 import { getScalingGuidance as fetchScalingGuidance } from '@/ai/flows/scaling-guidance';
 import type { ScalingGuidanceOutput } from '@/ai/flows/scaling-guidance';
 
@@ -11,7 +12,7 @@ export interface FormState {
   fields?: Record<string, string>;
   issues?: string[];
   success: boolean;
-  updatedSlots?: Record<string, number>;
+  updatedSlots?: Record<string, number>; // Key will be `${facultyId}_${subjectId}`
 }
 
 export async function submitFacultySelection(
@@ -19,6 +20,7 @@ export async function submitFacultySelection(
   formData: FormData
 ): Promise<FormState> {
   const subjects = await getSubjects();
+  const allFaculties = await getFaculties(); // Needed for initial slot reference on failure/rollback
   const formValues: Record<string, any> = { selections: {} };
 
   formData.forEach((value, key) => {
@@ -51,7 +53,6 @@ export async function submitFacultySelection(
     facultyId: facultyId as string,
   }));
 
-  // Validate all subjects have a selection
   if (selectionsArray.length !== subjects.length) {
      return { message: 'Please select a faculty for all subjects.', success: false };
   }
@@ -76,29 +77,23 @@ export async function submitFacultySelection(
     };
   }
 
-  // Attempt to update slots (simulated critical section)
-  const updatedSlotsAttempt: Record<string, number> = {};
   const originalSlots = await getFacultySlots(); // Get current slots before attempting update
 
   for (const selection of validatedData.data.selections) {
-    const result = updateFacultySlotSync(selection.facultyId);
+    const result = updateFacultySlotSync(selection.facultyId, selection.subjectId);
     if (!result.success) {
-      // Rollback: For this demo, we'll just return an error. A real app would need transactions.
-      // For now, we don't actually revert, just signal failure. A "reset" might be needed for true demo.
+      // A true rollback would revert previous successful updates in this loop.
+      // For this demo, we return the slots as they were *before* this submission attempt.
       return {
         message: `Failed to secure slot for faculty for subject ${subjects.find(s=>s.id === selection.subjectId)?.name}. ${result.error}`,
         success: false,
-        updatedSlots: originalSlots, // return original slots on failure
+        updatedSlots: originalSlots, 
       };
-    }
-    if (result.currentSlots !== undefined) {
-       updatedSlotsAttempt[selection.facultyId] = result.currentSlots;
     }
   }
   
-  // If all slots updated successfully
   console.log('Submission successful:', validatedData.data);
-  const finalUpdatedSlots = await getFacultySlots(); // Fetch the actual current state of slots
+  const finalUpdatedSlots = await getFacultySlots(); 
 
   return {
     message: `Thank you, ${validatedData.data.name}! Your faculty selections have been submitted successfully.`,
@@ -118,13 +113,13 @@ export async function getAIScalingGuidance(): Promise<ScalingGuidanceOutput> {
 }
 
 export async function fetchCurrentFacultySlots(): Promise<Record<string, number>> {
-  return getFacultySlots();
+  return getFacultySlots(); // Returns slots with composite keys `${facultyId}_${subjectId}`
 }
 
 export async function resetAllFacultySlots(): Promise<{success: boolean, message: string}> {
     try {
         await resetSlotsData();
-        return { success: true, message: "All faculty slots have been reset to their initial values." };
+        return { success: true, message: "All faculty slots have been reset to their initial values (per subject)." };
     } catch (error) {
         console.error("Error resetting faculty slots:", error);
         return { success: false, message: "Failed to reset faculty slots." };
