@@ -68,13 +68,12 @@ export function SubjectCard({
                     const slotKey = `${faculty.id}_${subject.id}`;
                     const slots = facultySlots[slotKey] ?? faculty.initialSlots; 
                     
-                    // Disable if slots are 0 AND it's not the currently selected faculty for this subject
                     const isOptionDisabled = slots === 0 && field.value !== faculty.id;
 
                     return (
                       <FormItem 
                         key={faculty.id} 
-                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${(isOptionDisabled && !isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+                        className={`flex items-center space-x-3 space-y-0 p-3 rounded-md border transition-all ${field.value === faculty.id ? 'border-primary bg-primary/10 shadow-sm' : 'border-border hover:bg-muted/50'} ${(isOptionDisabled || isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                       >
                         <FormControl>
                            <RadioGroupItem 
@@ -83,13 +82,13 @@ export function SubjectCard({
                              id={`${subject.id}-${faculty.id}`} 
                            />
                         </FormControl>
-                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${(isOptionDisabled && !isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                        <Label htmlFor={`${subject.id}-${faculty.id}`} className={`font-normal text-base flex-grow ${(isOptionDisabled || isSubmitted) ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
                           <div className="flex justify-between items-center">
                             <span className="flex items-center">
                               <Users className="mr-2 h-5 w-5 text-secondary-foreground" />
                               {faculty.name}
                             </span>
-                            <span className={`flex items-center text-sm ${slots <= 10 && slots > 0 ? 'text-destructive animate-subtle-pulse' : slots === 0 ? 'text-muted-foreground' : 'text-green-600'}`}>
+                            <span className={`flex items-center text-sm ${slots <= 10 && slots > 0 && !isSubmitted ? 'text-destructive animate-subtle-pulse' : (slots === 0 && !isSubmitted) ? 'text-muted-foreground' : isSubmitted && field.value === faculty.id ? 'text-primary' : isSubmitted ? 'text-muted-foreground' : 'text-green-600'}`}>
                               <Gauge className="mr-1 h-4 w-4" />
                               {slots} slots left
                             </span>
