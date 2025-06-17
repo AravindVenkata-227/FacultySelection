@@ -14,7 +14,7 @@ import { facultyConnectFormSchema, type FacultyConnectFormValues } from '@/lib/s
 import { submitFacultySelection, fetchCurrentFacultySlots, resetAllFacultySlots, type FormState } from '@/lib/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { CheckCircle, Send, Info, Loader2, RotateCcw } from 'lucide-react';
+import { CheckCircle, Send, Info, Loader2 } from 'lucide-react';
 
 interface FacultyConnectClientProps {
   initialSubjects: Subject[];
@@ -123,27 +123,6 @@ export default function FacultyConnectClient({
       }
     });
   };
-
-  const handleResetForm = async () => {
-    startTransition(async () => {
-      await resetAllFacultySlots(); 
-      const latestSlots = await fetchCurrentFacultySlots(); 
-      setCurrentFacultySlots(latestSlots);
-      reset({
-        ...defaultFormValues,
-        selections: initialSubjects.reduce((acc, subject) => {
-          acc[subject.id] = '';
-          return acc;
-        }, {} as Record<string, string>),
-      });
-      setIsSubmitted(false);
-      setFormState(undefined);
-      toast({
-        title: "Form Reset",
-        description: "The form and all faculty slots have been reset.",
-      });
-    });
-  };
   
   useEffect(() => {
     if (Object.keys(currentFacultySlots).length === 0 && Object.keys(initialSlots).length > 0) {
@@ -215,17 +194,7 @@ export default function FacultyConnectClient({
                 <CheckCircle className="mr-2 h-6 w-6" /> Your selections have been submitted!
               </p>
             )}
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={handleResetForm} 
-              disabled={isPending}
-              className="w-full sm:w-auto text-lg py-3 px-8 border-accent text-accent hover:bg-accent/10 shadow-sm transition-colors"
-              aria-label="Reset Form and Slots"
-            >
-              <RotateCcw className="mr-2 h-5 w-5" />
-              Reset Form & Slots
-            </Button>
+            {/* Reset button was here and has been removed */}
           </div>
         </form>
       </Form>
