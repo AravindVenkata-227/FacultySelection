@@ -140,7 +140,7 @@ export default function FacultyConnectClient({
   return (
     <div className="container mx-auto p-4 sm:p-6 md:p-8 flex-grow">
       <header className="text-center mb-10">
-        <h1 className="text-4xl sm:text-5xl font-headline font-bold text-primary">Faculty Connect</h1>
+        <h1 className="text-3xl sm:text-4xl lg:text-5xl font-headline font-bold text-primary">IV-I CSE-Subject Allotment-June2025</h1>
         <p className="text-lg text-muted-foreground mt-2">Streamlined faculty selection for your subjects.</p>
       </header>
 

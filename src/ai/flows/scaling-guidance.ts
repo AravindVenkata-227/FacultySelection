@@ -1,7 +1,7 @@
 // scaling-guidance.ts
 'use server';
 /**
- * @fileOverview Provides scaling guidance for the Faculty Connect application using GenAI.
+ * @fileOverview Provides scaling guidance for the IV-I CSE-Subject Allotment-June2025 application using GenAI.
  *
  * - getScalingGuidance - A function that generates scaling recommendations based on the app's architecture.
  * - ScalingGuidanceInput - The input type for the getScalingGuidance function (currently empty).
@@ -15,7 +15,7 @@ const ScalingGuidanceInputSchema = z.object({});
 export type ScalingGuidanceInput = z.infer<typeof ScalingGuidanceInputSchema>;
 
 const ScalingGuidanceOutputSchema = z.object({
-  recommendations: z.string().describe('Scaling recommendations for the Faculty Connect application.'),
+  recommendations: z.string().describe('Scaling recommendations for the IV-I CSE-Subject Allotment-June2025 application.'),
 });
 export type ScalingGuidanceOutput = z.infer<typeof ScalingGuidanceOutputSchema>;
 
@@ -28,7 +28,7 @@ const prompt = ai.definePrompt({
   input: {schema: ScalingGuidanceInputSchema},
   output: {schema: ScalingGuidanceOutputSchema},
   prompt: `You are an expert in scaling web applications, especially those built with Next.js and Firebase. 
-Given the Faculty Connect application, which allows students to select faculty members for different subjects,
+Given the IV-I CSE-Subject Allotment-June2025 application, which allows students to select faculty members for different subjects,
 provide scaling recommendations to handle 300 concurrent users. Consider Firebase configurations, database optimizations,
 and caching strategies. Present the recommendations in a clear, actionable format.
 

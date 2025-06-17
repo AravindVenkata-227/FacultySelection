@@ -61,7 +61,7 @@ export function ScalabilityGuidance() {
               AI-Powered Scaling Guidance
             </DialogTitle>
             <DialogDescription>
-              Recommendations for scaling the Faculty Connect application to handle high concurrency.
+              Recommendations for scaling the IV-I CSE-Subject Allotment-June2025 application to handle high concurrency.
             </DialogDescription>
           </DialogHeader>
           

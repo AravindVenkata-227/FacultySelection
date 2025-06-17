@@ -3,7 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
 export const metadata: Metadata = {
-  title: 'Faculty Connect',
+  title: 'IV-I CSE-Subject Allotment-June2025',
   description: 'Select your faculty and subjects.',
 };
 
