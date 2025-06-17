@@ -40,9 +40,9 @@ const _faculties: Faculty[] = [
 
 const _subjects: Subject[] = [
   { id: 's1', name: 'Artificial Intelligence (AI)', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's2', name: 'CS', facultyOptions: ['f4', 'f5', 'f6'] },
-  { id: 's3', name: 'LSA', facultyOptions: ['f7', 'f8', 'f9'] },
-  { id: 's4', name: 'OOAD', facultyOptions: ['f10', 'f11', 'f12'] },
+  { id: 's2', name: 'Cyber Security (CS)', facultyOptions: ['f4', 'f5', 'f6'] },
+  { id: 's3', name: 'Linux System Administration (LSA)', facultyOptions: ['f7', 'f8', 'f9'] },
+  { id: 's4', name: 'Object Oriented Analysis & Design (OOAD)', facultyOptions: ['f10', 'f11', 'f12'] },
   { id: 's5', name: 'MS', facultyOptions: ['f13', 'f14', 'f15'] },
   { id: 's6', name: 'BCT', facultyOptions: ['f16', 'f17', 'f18'] },
 ];
