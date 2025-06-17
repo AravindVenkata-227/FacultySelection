@@ -18,12 +18,12 @@ const _faculties: Faculty[] = [
 ];
 
 const _subjects: Subject[] = [
-  { id: 's1', name: 'Advanced Quantum Physics', facultyOptions: ['f1', 'f2'] },
-  { id: 's2', name: 'Organic Chemistry Symphony', facultyOptions: ['f2', 'f3'] },
-  { id: 's3', name: 'Computational Linguistics', facultyOptions: ['f1', 'f3'] },
+  { id: 's1', name: 'Advanced Quantum Physics', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's2', name: 'Organic Chemistry Symphony', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's3', name: 'Computational Linguistics', facultyOptions: ['f1', 'f2', 'f3'] },
   { id: 's4', name: 'Ancient Civilizations & Mythology', facultyOptions: ['f1', 'f2', 'f3'] },
-  { id: 's5', name: 'Modern Political Theory', facultyOptions: ['f2', 'f3'] },
-  { id: 's6', name: 'Astrobiology Fundamentals', facultyOptions: ['f1', 'f3'] },
+  { id: 's5', name: 'Modern Political Theory', facultyOptions: ['f1', 'f2', 'f3'] },
+  { id: 's6', name: 'Astrobiology Fundamentals', facultyOptions: ['f1', 'f2', 'f3'] },
 ];
 
 // In-memory store for slots - this is a simplification for demo purposes.
@@ -32,13 +32,13 @@ let facultySlotsData: Record<string, number> = {};
 let dataInitialized = false;
 
 const initializeDataStore = () => {
-  if (dataInitialized && Object.keys(facultySlotsData).length > 0 && 
+  if (dataInitialized && Object.keys(facultySlotsData).length > 0 &&
       Object.keys(facultySlotsData).length === _faculties.length &&
       _faculties.every(f => facultySlotsData[f.id] !== undefined)) {
     // Basic check to see if it might be already initialized with current faculty set
     return;
   }
-  
+
   facultySlotsData = {}; // Clear previous data if faculties changed
   _faculties.forEach(faculty => {
     facultySlotsData[faculty.id] = faculty.initialSlots;
@@ -92,4 +92,3 @@ export async function resetAllFacultySlots(): Promise<void> {
     dataInitialized = true; // Ensure it's marked as initialized
     console.log('Faculty slots reset to:', facultySlotsData);
 }
-
