@@ -1,3 +1,4 @@
+
 'use client';
 
 import type { Control } from 'react-hook-form';
@@ -37,6 +38,7 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
                   id="rollNumber"
                   placeholder="e.g., 21091A05A0"
                   {...field}
+                  value={field.value ?? ''}
                   disabled={isSubmitted}
                   aria-describedby="rollNumber-error"
                   className="text-base"
@@ -62,6 +64,7 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
                   id="name"
                   placeholder="e.g., John Doe"
                   {...field}
+                  value={field.value ?? ''}
                   disabled={isSubmitted}
                   aria-describedby="name-error"
                   className="text-base"
@@ -88,6 +91,7 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
                   type="email"
                   placeholder="e.g., john.doe@example.com"
                   {...field}
+                  value={field.value ?? ''} // Ensure value is always defined
                   disabled={isSubmitted}
                   aria-describedby="email-error"
                   className="text-base"
@@ -114,6 +118,7 @@ export function StudentInfoForm({ control, isSubmitted, formFields }: StudentInf
                   type="tel"
                   placeholder="e.g., +91 9876543210"
                   {...field}
+                  value={field.value ?? ''} // Ensure value is always defined
                   disabled={isSubmitted}
                   aria-describedby="whatsappNumber-error"
                   className="text-base"
