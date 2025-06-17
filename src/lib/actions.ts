@@ -3,9 +3,10 @@
 
 import { z } from 'zod';
 import { studentInfoSchema, submissionSchema, FacultyConnectFormValues } from './schema';
-import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData, getFaculties } from './data';
+import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData, getFaculties, Faculty, Subject } from './data';
 import { getScalingGuidance as fetchScalingGuidance } from '@/ai/flows/scaling-guidance';
 import type { ScalingGuidanceOutput } from '@/ai/flows/scaling-guidance';
+import { appendToSheet, ensureSheetHeaders } from '@/services/google-sheets-service';
 
 export interface FormState {
   message: string;
@@ -19,8 +20,8 @@ export async function submitFacultySelection(
   prevState: FormState | undefined,
   formData: FormData
 ): Promise<FormState> {
-  const subjects = await getSubjects();
-  const allFaculties = await getFaculties(); // Needed for initial slot reference on failure/rollback
+  const subjects: Subject[] = await getSubjects();
+  const allFaculties: Faculty[] = await getFaculties();
   const formValues: Record<string, any> = { selections: {} };
 
   formData.forEach((value, key) => {
@@ -77,13 +78,11 @@ export async function submitFacultySelection(
     };
   }
 
-  const originalSlots = await getFacultySlots(); // Get current slots before attempting update
+  const originalSlots = await getFacultySlots(); 
 
   for (const selection of validatedData.data.selections) {
     const result = updateFacultySlotSync(selection.facultyId, selection.subjectId);
     if (!result.success) {
-      // A true rollback would revert previous successful updates in this loop.
-      // For this demo, we return the slots as they were *before* this submission attempt.
       return {
         message: `Failed to secure slot for faculty for subject ${subjects.find(s=>s.id === selection.subjectId)?.name}. ${result.error}`,
         success: false,
@@ -92,8 +91,47 @@ export async function submitFacultySelection(
     }
   }
   
-  console.log('Submission successful:', validatedData.data);
   const finalUpdatedSlots = await getFacultySlots(); 
+
+  // Append to Google Sheet after successful slot update
+  try {
+    const submissionTimestamp = new Date().toISOString();
+    const studentRollNumber = validatedData.data.rollNumber;
+    const studentName = validatedData.data.name;
+
+    const sheetHeaders = ["Timestamp", "Roll Number", "Name"];
+    subjects.forEach(subject => sheetHeaders.push(subject.name)); // Subject names as headers
+
+    const sheetRowData = [submissionTimestamp, studentRollNumber, studentName];
+    subjects.forEach(subject => {
+      const selection = validatedData.data.selections.find(s => s.subjectId === subject.id);
+      if (selection) {
+        const faculty = allFaculties.find(f => f.id === selection.facultyId);
+        sheetRowData.push(faculty ? faculty.name : 'N/A - Faculty ID not found');
+      } else {
+        // This case should ideally be caught by earlier validation
+        sheetRowData.push('Not Selected'); 
+      }
+    });
+    
+    const headersEnsured = await ensureSheetHeaders(sheetHeaders);
+    if (headersEnsured) {
+      const appendedToSheet = await appendToSheet([sheetRowData]);
+      if (appendedToSheet) {
+        console.log('Submission data successfully written to Google Sheet.');
+      } else {
+        console.warn('Submission successful, but failed to write data to Google Sheet. Check service account permissions and SPREADSHEET_ID/SHEET_NAME.');
+        // Not failing the entire submission, but logging a warning.
+      }
+    } else {
+      console.warn('Failed to ensure Google Sheet headers. Submission data not written to sheet.');
+    }
+  } catch (sheetError) {
+    console.error('Error during Google Sheet operation:', sheetError);
+    // Log the error but don't fail the user's submission if other parts were successful.
+  }
+
+  console.log('Submission successful:', validatedData.data);
 
   return {
     message: `Thank you, ${validatedData.data.name}! Your faculty selections have been submitted successfully.`,
@@ -113,7 +151,7 @@ export async function getAIScalingGuidance(): Promise<ScalingGuidanceOutput> {
 }
 
 export async function fetchCurrentFacultySlots(): Promise<Record<string, number>> {
-  return getFacultySlots(); // Returns slots with composite keys `${facultyId}_${subjectId}`
+  return getFacultySlots();
 }
 
 export async function resetAllFacultySlots(): Promise<{success: boolean, message: string}> {

@@ -26,43 +26,32 @@ const _subjects: Subject[] = [
   { id: 's6', name: 'Astrobiology Fundamentals', facultyOptions: ['f1', 'f2', 'f3'] },
 ];
 
-// In-memory store for slots: key is `${facultyId}_${subjectId}`
 let facultySlotsData: Record<string, number> = {};
 let dataInitialized = false;
 
 const initializeDataStore = () => {
-  // Re-initialize if not initialized or if the structure implies a reset is needed
-  // This is a simplified check for development; a real app might need more robust versioning or migration
-  const expectedKeysCount = _subjects.reduce((count, subject) => {
-    const teachingFaculty = _faculties.filter(f => subject.facultyOptions.includes(f.id));
-    return count + teachingFaculty.length;
-  }, 0);
-
-  if (dataInitialized && Object.keys(facultySlotsData).length === expectedKeysCount) {
-     // Basic check to see if it might be already initialized.
-     // More robust checks could verify specific keys or values if faculty/subject data changes frequently.
-    let allKeysMatchInitialValue = true;
-    for (const subject of _subjects) {
-        for (const facultyId of subject.facultyOptions) {
-            const faculty = _faculties.find(f => f.id === facultyId);
-            if (faculty) {
-                const key = `${faculty.id}_${subject.id}`;
-                if (facultySlotsData[key] !== faculty.initialSlots && facultySlotsData[key] !== undefined /* existing value may be less due to selections */) {
-                    // This part of the check is tricky as slots can be legitimately lower.
-                    // The primary goal is to ensure initialization if the set of keys changes.
-                }
+  if (dataInitialized) {
+    // A simple check: if the number of faculties or subjects changes, re-initialize.
+    // This is a basic way to handle potential structural changes during development.
+    let expectedKeysCount = 0;
+    _subjects.forEach(subject => {
+        subject.facultyOptions.forEach(facultyId => {
+            if (_faculties.some(f => f.id === facultyId)) {
+                expectedKeysCount++;
             }
-        }
+        });
+    });
+    if (Object.keys(facultySlotsData).length === expectedKeysCount) {
+        return; // Assume data is fine if key count matches expected.
     }
-    // If the number of keys is right, assume it's initialized enough for demo.
-    // A full re-check of initial values for all keys might be too aggressive if slots are meant to persist.
-    // For now, if key count matches, we assume it's mostly fine. Reset is explicit.
-    return;
+    // If key count mismatch, means structure might have changed, so re-initialize.
+    console.log('Re-initializing data store due to potential structure change.');
   }
 
-  facultySlotsData = {}; // Clear previous data
+  facultySlotsData = {}; 
    _faculties.forEach(faculty => {
     _subjects.forEach(subject => {
+      // Only create slot entries if the faculty is listed as an option for the subject
       if (subject.facultyOptions.includes(faculty.id)) {
         const key = `${faculty.id}_${subject.id}`;
         facultySlotsData[key] = faculty.initialSlots;
@@ -90,17 +79,42 @@ export async function getSubjects(): Promise<Subject[]> {
   return JSON.parse(JSON.stringify(_subjects));
 }
 
+export async function getSubjectById(id: string): Promise<Subject | undefined> {
+  initializeDataStore();
+  return _subjects.find(s => s.id === id);
+}
+
+
 export async function getFacultySlots(): Promise<Record<string, number>> {
   initializeDataStore();
   return JSON.parse(JSON.stringify(facultySlotsData));
 }
 
 export function updateFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
-  initializeDataStore();
+  initializeDataStore(); // Ensure data is initialized before trying to update
   const key = `${facultyId}_${subjectId}`;
+  
   if (facultySlotsData[key] === undefined) {
-    return { success: false, error: 'Faculty not assigned to this subject or slot data missing.' };
+    // This check is important. If a facultyId_subjectId key doesn't exist,
+    // it means either the faculty isn't assigned to the subject or data isn't initialized correctly.
+    const facultyExists = _faculties.some(f => f.id === facultyId);
+    const subjectExists = _subjects.some(s => s.id === subjectId);
+    const facultyTeachesSubject = _subjects.find(s => s.id === subjectId)?.facultyOptions.includes(facultyId);
+
+    if (!facultyExists || !subjectExists || !facultyTeachesSubject) {
+         return { success: false, error: 'Faculty not assigned to this subject or invalid IDs.' };
+    }
+    // If IDs are valid but key is missing, it implies an initialization issue (should be caught by initializeDataStore)
+    // or an attempt to select a faculty for a subject they don't teach (should be caught by UI ideally).
+    // For robustness, if the key is missing but should exist, initialize it.
+    // This scenario should be rare if initializeDataStore is robust and UI is correct.
+    console.warn(`Slot key ${key} was undefined. Re-checking initialization.`);
+    initializeDataStore(); // Attempt to re-initialize if it seems off
+    if (facultySlotsData[key] === undefined) {
+       return { success: false, error: 'Slot data missing even after re-check. Faculty might not be configured for this subject.' };
+    }
   }
+
   if (facultySlotsData[key] > 0) {
     facultySlotsData[key]--;
     return { success: true, currentSlots: facultySlotsData[key] };
@@ -109,8 +123,7 @@ export function updateFacultySlotSync(facultyId: string, subjectId: string): { s
 }
 
 export async function resetAllFacultySlots(): Promise<void> {
-  // Reset the slots data to initial values by re-running initialization
-  dataInitialized = false; // Force re-initialization
+  dataInitialized = false; 
   initializeDataStore();
   console.log('Faculty slots reset (per-subject) to:', facultySlotsData);
 }
