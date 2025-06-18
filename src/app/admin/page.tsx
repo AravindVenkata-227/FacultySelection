@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Import ScrollBar
 import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,7 +43,7 @@ export default function AdminDashboardPage() {
         } else if (Array.isArray(data) && data.length === 0) {
           setSubmissions([]);
           setHeaders([]);
-        } else if (data === null || !Array.isArray(data)) { // Handle case where data is null (service unavailable) or not an array
+        } else if (data === null || !Array.isArray(data)) { 
           setSubmissions([]);
           setHeaders([]);
           if (data === null) {
@@ -83,8 +83,8 @@ export default function AdminDashboardPage() {
     }
     let stringField = String(field);
     if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-      stringField = stringField.replace(/"/g, '""'); // Escape existing double quotes
-      return `"${stringField}"`; // Enclose in double quotes
+      stringField = stringField.replace(/"/g, '""'); 
+      return `"${stringField}"`; 
     }
     return stringField;
   };
@@ -100,7 +100,7 @@ export default function AdminDashboardPage() {
     }
 
     const csvContent = [
-      headers.map(escapeCSVField).join(','), // Header row
+      headers.map(escapeCSVField).join(','), 
       ...submissions.map(submission =>
         headers.map(header => escapeCSVField(submission[header])).join(',')
       )
@@ -181,7 +181,7 @@ export default function AdminDashboardPage() {
                 <p className="text-muted-foreground">No submissions found yet.</p>
               </div>
             ) : (
-              <ScrollArea className="max-h-[calc(100vh-22rem)] w-full overflow-auto">
+              <ScrollArea className="max-h-[calc(100vh-22rem)] w-full"> {/* Removed overflow-auto */}
                 <Table>
                   <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                     <TableRow>
@@ -200,6 +200,7 @@ export default function AdminDashboardPage() {
                     ))}
                   </TableBody>
                 </Table>
+                <ScrollBar orientation="horizontal" /> {/* Added horizontal scrollbar */}
               </ScrollArea>
             )}
           </CardContent>
@@ -211,4 +212,3 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
-
