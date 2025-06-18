@@ -1,13 +1,37 @@
 
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area'; // Import ScrollBar
-import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Submission {
@@ -18,52 +42,54 @@ export default function AdminDashboardPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null); // Stores rollNumber being deleted
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const response = await fetch('/api/admin/submissions');
-        if (!response.ok) {
-          if (response.status === 401) {
-            toast({ title: 'Unauthorized', description: 'Redirecting to login.', variant: 'destructive'});
-            router.push('/admin/login');
-            return;
-          }
-          throw new Error(`Failed to fetch submissions: ${response.statusText}`);
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
+    try {
+      const response = await fetch('/api/admin/submissions');
+      if (!response.ok) {
+        if (response.status === 401) {
+          toast({ title: 'Unauthorized', description: 'Redirecting to login.', variant: 'destructive' });
+          router.push('/admin/login');
+          return;
         }
-        const data = await response.json();
-        if (data && Array.isArray(data) && data.length > 0) {
-          setHeaders(Object.keys(data[0]));
-          setSubmissions(data);
-        } else if (Array.isArray(data) && data.length === 0) {
-          setSubmissions([]);
-          setHeaders([]);
-        } else if (data === null || !Array.isArray(data)) { 
-          setSubmissions([]);
-          setHeaders([]);
-          if (data === null) {
-             setError('Failed to retrieve data from source. Service might be unavailable.');
-             toast({ title: 'Error', description: 'Failed to retrieve data from source. Service might be unavailable.', variant: 'destructive'});
-          } else {
-             setError('Received unexpected data format for submissions.');
-             toast({ title: 'Error', description: 'Received unexpected data format for submissions.', variant: 'destructive'});
-          }
-        }
-      } catch (err: any) {
-        console.error('Error fetching submissions:', err);
-        setError(err.message || 'Could not fetch submissions.');
-        toast({ title: 'Error', description: err.message || 'Could not fetch submissions.', variant: 'destructive'});
-      } finally {
-        setIsLoading(false);
+        throw new Error(`Failed to fetch submissions: ${response.statusText}`);
       }
-    };
-    fetchData();
+      const data = await response.json();
+      if (data && Array.isArray(data) && data.length > 0) {
+        // Dynamically get headers from the first object, excluding a potential 'rowIndex' if added
+        const firstItemKeys = Object.keys(data[0]).filter(key => key !== 'rowIndex');
+        setHeaders(firstItemKeys);
+        setSubmissions(data);
+      } else if (Array.isArray(data) && data.length === 0) {
+        setSubmissions([]);
+        setHeaders([]); // No data, so no headers to display
+      } else if (data === null || !Array.isArray(data)) {
+        setSubmissions([]);
+        setHeaders([]);
+        const errorMessage = data === null 
+          ? 'Failed to retrieve data from source. Service might be unavailable.' 
+          : 'Received unexpected data format for submissions.';
+        setError(errorMessage);
+        toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+      }
+    } catch (err: any) {
+      console.error('Error fetching submissions:', err);
+      setError(err.message || 'Could not fetch submissions.');
+      toast({ title: 'Error', description: err.message || 'Could not fetch submissions.', variant: 'destructive' });
+    } finally {
+      setIsLoading(false);
+    }
   }, [router, toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handleLogout = async () => {
     try {
@@ -73,7 +99,7 @@ export default function AdminDashboardPage() {
       router.refresh();
     } catch (err) {
       console.error('Logout failed:', err);
-      toast({ title: 'Logout Failed', description: 'Could not log out. Please try again.', variant: 'destructive'});
+      toast({ title: 'Logout Failed', description: 'Could not log out. Please try again.', variant: 'destructive' });
     }
   };
 
@@ -83,8 +109,8 @@ export default function AdminDashboardPage() {
     }
     let stringField = String(field);
     if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
-      stringField = stringField.replace(/"/g, '""'); 
-      return `"${stringField}"`; 
+      stringField = stringField.replace(/"/g, '""');
+      return `"${stringField}"`;
     }
     return stringField;
   };
@@ -100,7 +126,7 @@ export default function AdminDashboardPage() {
     }
 
     const csvContent = [
-      headers.map(escapeCSVField).join(','), 
+      headers.map(escapeCSVField).join(','),
       ...submissions.map(submission =>
         headers.map(header => escapeCSVField(submission[header])).join(',')
       )
@@ -122,7 +148,7 @@ export default function AdminDashboardPage() {
         description: 'The submissions CSV file is being downloaded.',
       });
     } else {
-       toast({
+      toast({
         title: 'Download Failed',
         description: 'Your browser does not support direct file downloads.',
         variant: 'destructive',
@@ -130,6 +156,32 @@ export default function AdminDashboardPage() {
     }
   };
 
+  const handleDeleteSubmission = async (rollNumber: string) => {
+    setIsDeleting(rollNumber);
+    try {
+      const response = await fetch('/api/admin/submissions/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rollNumber }),
+      });
+      const result = await response.json();
+      if (response.ok || response.status === 207) { // 207 for partial success
+        toast({
+          title: response.ok ? 'Submission Deleted' : 'Partial Success',
+          description: result.message,
+          variant: response.ok ? 'default' : 'default', // or a different variant for partial
+        });
+        fetchData(); // Refresh data
+      } else {
+        throw new Error(result.message || 'Failed to delete submission.');
+      }
+    } catch (err: any) {
+      console.error('Error deleting submission:', err);
+      toast({ title: 'Deletion Failed', description: err.message, variant: 'destructive' });
+    } finally {
+      setIsDeleting(null);
+    }
+  };
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
@@ -181,13 +233,14 @@ export default function AdminDashboardPage() {
                 <p className="text-muted-foreground">No submissions found yet.</p>
               </div>
             ) : (
-              <ScrollArea className="max-h-[calc(100vh-22rem)] w-full"> {/* Removed overflow-auto */}
+              <ScrollArea className="max-h-[calc(100vh-22rem)] w-full">
                 <Table>
                   <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                     <TableRow>
                       {headers.map((header) => (
                         <TableHead key={header} className="font-semibold whitespace-nowrap">{header.replace(/([A-Z])/g, ' $1').trim()}</TableHead>
                       ))}
+                      <TableHead className="font-semibold whitespace-nowrap text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -196,19 +249,59 @@ export default function AdminDashboardPage() {
                         {headers.map((header) => (
                           <TableCell key={header} className="whitespace-nowrap">{submission[header]}</TableCell>
                         ))}
+                        <TableCell className="whitespace-nowrap text-right">
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="text-destructive hover:text-destructive/80"
+                                disabled={isDeleting === submission['Roll Number']}
+                                aria-label={`Delete submission for ${submission['Name'] || submission['Roll Number']}`}
+                              >
+                                {isDeleting === submission['Roll Number'] ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This action will permanently delete the submission for roll number 
+                                  <span className="font-semibold"> {submission['Roll Number']} ({submission['Name']})</span>. 
+                                  This will also restore their chosen faculty slots. This student will be able to submit the form again 
+                                  (they might need to clear their browser's local storage).
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel disabled={isDeleting === submission['Roll Number']}>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => handleDeleteSubmission(submission['Roll Number'])}
+                                  disabled={isDeleting === submission['Roll Number']}
+                                  className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
+                                >
+                                  {isDeleting === submission['Roll Number'] ? 'Deleting...' : 'Yes, delete'}
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
                 </Table>
-                <ScrollBar orientation="horizontal" /> {/* Added horizontal scrollbar */}
+                <ScrollBar orientation="horizontal" />
               </ScrollArea>
             )}
           </CardContent>
         </Card>
       </main>
-       <footer className="text-center p-4 text-xs text-muted-foreground">
-          Faculty Connect Admin Panel
-        </footer>
+      <footer className="text-center p-4 text-xs text-muted-foreground">
+        Faculty Connect Admin Panel
+      </footer>
     </div>
   );
 }

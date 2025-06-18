@@ -55,7 +55,6 @@ const initializeDataStore = () => {
     let expectedKeysCount = 0;
     _subjects.forEach(subject => {
         subject.facultyOptions.forEach(facultyId => {
-            // Ensure the faculty is actually in the _faculties list
             if (_faculties.some(f => f.id === facultyId)) {
                 expectedKeysCount++;
             }
@@ -72,9 +71,9 @@ const initializeDataStore = () => {
   _subjects.forEach(subject => {
     subject.facultyOptions.forEach(facultyId => {
       const faculty = _faculties.find(f => f.id === facultyId);
-      if (faculty) { // Ensure faculty exists
+      if (faculty) {
         const key = `${faculty.id}_${subject.id}`;
-        facultySlotsData[key] = faculty.initialSlots; // Each faculty has distinct slots for the subject they teach
+        facultySlotsData[key] = faculty.initialSlots;
       }
     });
   });
@@ -123,7 +122,7 @@ export function updateFacultySlotSync(facultyId: string, subjectId: string): { s
 
   if (facultySlotsData[key] === undefined) {
     console.warn(`Slot key ${key} was undefined despite valid faculty/subject. Initializing it.`);
-    facultySlotsData[key] = faculty.initialSlots; // Initialize if somehow missed
+    facultySlotsData[key] = faculty.initialSlots;
   }
 
   if (facultySlotsData[key] > 0) {
@@ -133,9 +132,41 @@ export function updateFacultySlotSync(facultyId: string, subjectId: string): { s
   return { success: false, error: 'No slots available for this faculty in this subject.', currentSlots: 0 };
 }
 
+export function incrementFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
+  initializeDataStore();
+  const key = `${facultyId}_${subjectId}`;
+
+  const faculty = _faculties.find(f => f.id === facultyId);
+  const subject = _subjects.find(s => s.id === subjectId);
+
+  if (!faculty || !subject || !subject.facultyOptions.includes(facultyId)) {
+    return { success: false, error: 'Faculty not assigned to this subject or invalid IDs for slot increment.' };
+  }
+
+  if (facultySlotsData[key] === undefined) {
+    // This case should ideally not happen if data is consistent
+    console.warn(`Slot key ${key} was undefined during increment. Setting to 1.`);
+    facultySlotsData[key] = 1; // Or faculty.initialSlots if that's preferred, but 1 seems safer if it was 0.
+  } else {
+    // Only increment if it's less than initial slots to prevent over-incrementing beyond original capacity
+    // This check assumes faculty.initialSlots is the max for that specific subject pairing.
+    const targetFacultyForSubject = _faculties.find(f => f.id === facultyId);
+    if (targetFacultyForSubject && facultySlotsData[key] < targetFacultyForSubject.initialSlots) {
+      facultySlotsData[key]++;
+    } else if (targetFacultyForSubject && facultySlotsData[key] >= targetFacultyForSubject.initialSlots) {
+      console.warn(`Slot key ${key} for faculty ${facultyId} / subject ${subjectId} is already at or above initial capacity (${targetFacultyForSubject.initialSlots}). Not incrementing.`);
+      // Optionally return an error or different status if incrementing beyond initial is an issue.
+      // For now, we just don't increment.
+    } else {
+         // Fallback if targetFacultyForSubject not found, just increment (less safe)
+         facultySlotsData[key]++;
+    }
+  }
+  return { success: true, currentSlots: facultySlotsData[key] };
+}
+
 export async function resetAllFacultySlots(): Promise<void> {
   dataInitialized = false; 
   initializeDataStore();
   console.log('Faculty slots reset (per-subject) to:', facultySlotsData);
 }
-

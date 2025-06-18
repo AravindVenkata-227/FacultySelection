@@ -5,7 +5,7 @@ import { google } from 'googleapis';
 import type { sheets_v4 } from 'googleapis';
 
 const SPREADSHEET_ID = process.env.GOOGLE_SHEET_ID;
-const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1'; // Default to Sheet1 if not set
+const SHEET_NAME = process.env.GOOGLE_SHEET_NAME || 'Sheet1';
 
 console.log(`[Google Sheets Service] Initialized. SPREADSHEET_ID: "${SPREADSHEET_ID}", SHEET_NAME: "${SHEET_NAME}"`);
 console.log(`[Google Sheets Service] GOOGLE_APPLICATION_CREDENTIALS path from env: "${process.env.GOOGLE_APPLICATION_CREDENTIALS}"`);
@@ -19,8 +19,6 @@ async function getSheetsClient(): Promise<sheets_v4.Sheets | null> {
   try {
     const auth = new google.auth.GoogleAuth({
       scopes: ['https://www.googleapis.com/auth/spreadsheets'],
-      // Credentials will be automatically sourced from GOOGLE_APPLICATION_CREDENTIALS
-      // environment variable if set, or from the GCE metadata server if running on Google Cloud.
     });
     const authClient = await auth.getClient();
     console.log('[Google Sheets Service] GoogleAuth client obtained successfully.');
@@ -50,7 +48,7 @@ export async function appendToSheet(rowData: any[][]): Promise<boolean> {
   }
 
   try {
-    const range = `${SHEET_NAME}!A1`; // Appends after the last row with data in this sheet
+    const range = `${SHEET_NAME}!A1`;
     console.log(`[Google Sheets Service] Appending to range: ${range}`);
 
     const resource: sheets_v4.Params$Resource$Spreadsheets$Values$Append = {
@@ -96,7 +94,7 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
   }
 
   try {
-    const range = `${SHEET_NAME}!1:1`; // Check the first row
+    const range = `${SHEET_NAME}!1:1`; 
     console.log(`[Google Sheets Service] Checking headers in range: ${range}`);
 
     const response = await sheets.spreadsheets.values.get({
@@ -115,11 +113,9 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
     
     if (!headersMatch) {
       console.log('[Google Sheets Service] Headers are missing or incorrect. Writing new headers.');
-      // It's safer to clear only if we are sure we need to update, and if the sheet is supposed to be managed by this app.
-      // For now, just update. If the row exists, it's updated. If not, it's created if permissions allow.
       const updateResponse = await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: range, // Update the first row
+        range: range,
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [expectedHeaders],
@@ -178,8 +174,6 @@ export async function getSheetData(): Promise<any[] | null> {
   }
 
   try {
-    // Attempt to get all data. This assumes a reasonable number of columns; adjust if necessary.
-    // Example: 'Sheet1!A:Z' or more specific if known. Or simply SHEET_NAME to get all cells.
     const range = `${SHEET_NAME}`; 
     console.log(`[Google Sheets Service] Getting data from range: ${range}`);
 
@@ -192,7 +186,6 @@ export async function getSheetData(): Promise<any[] | null> {
     const rows = response.data.values;
     if (rows && rows.length) {
       console.log(`[Google Sheets Service] Successfully retrieved ${rows.length} rows.`);
-      // Convert array of arrays to array of objects using the first row as headers
       const headers = rows[0] as string[];
       const data = rows.slice(1).map(rowArray => {
         let obj: {[key: string]: string} = {};
@@ -214,6 +207,120 @@ export async function getSheetData(): Promise<any[] | null> {
     if (error instanceof Error && 'errors' in error) {
         console.error('[Google Sheets Service] Google API specific errors from getSheetData exception:', (error as any).errors);
     }
-    return null; // Indicates an error occurred rather than empty data
+    return null;
+  }
+}
+
+export async function deleteSheetRowByRollNumber(
+  rollNumberToDelete: string
+): Promise<{ success: boolean; error?: string; deletedStudentChoices?: Record<string, string> }> {
+  console.log(`[Google Sheets Service] Attempting to delete row for roll number: ${rollNumberToDelete}`);
+  if (!SPREADSHEET_ID) {
+    console.error('[Google Sheets Service] SPREADSHEET_ID environment variable is not set. Cannot delete row.');
+    return { success: false, error: 'Server configuration error: SPREADSHEET_ID not set.' };
+  }
+
+  const sheets = await getSheetsClient();
+  if (!sheets) {
+    console.error('[Google Sheets Service] Sheet client not available for delete. Cannot delete row.');
+    return { success: false, error: 'Sheet client initialization failed.' };
+  }
+
+  try {
+    // 1. Get the sheetId for the given SHEET_NAME
+    console.log(`[Google Sheets Service] Fetching spreadsheet metadata to find sheetId for "${SHEET_NAME}"`);
+    const spreadsheetMeta = await sheets.spreadsheets.get({ spreadsheetId: SPREADSHEET_ID });
+    const sheetProperties = spreadsheetMeta.data.sheets?.find(s => s.properties?.title === SHEET_NAME);
+    if (!sheetProperties || typeof sheetProperties.properties?.sheetId !== 'number') {
+      console.error(`[Google Sheets Service] Could not find sheetId for sheet named "${SHEET_NAME}".`);
+      return { success: false, error: `Sheet named "${SHEET_NAME}" not found or has no ID.` };
+    }
+    const sheetId = sheetProperties.properties.sheetId;
+    console.log(`[Google Sheets Service] Found sheetId: ${sheetId} for "${SHEET_NAME}".`);
+
+    // 2. Get all data to find the row index and extract choices
+    console.log(`[Google Sheets Service] Getting all data from sheet "${SHEET_NAME}" to find row index.`);
+    const range = `${SHEET_NAME}`; // Read the whole sheet
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: range,
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length === 0) {
+      console.log('[Google Sheets Service] No data in sheet, cannot find row to delete.');
+      return { success: false, error: 'Sheet is empty or no data found.' };
+    }
+
+    const headers = rows[0] as string[];
+    const rollNumberColumnIndex = headers.findIndex(header => header.toLowerCase() === 'roll number'); // Case-insensitive search
+
+    if (rollNumberColumnIndex === -1) {
+      console.error('[Google Sheets Service] "Roll Number" column not found in sheet headers:', headers);
+      return { success: false, error: '"Roll Number" column not found in sheet.' };
+    }
+    console.log(`[Google Sheets Service] "Roll Number" column index: ${rollNumberColumnIndex}. Headers: ${headers.join(', ')}`);
+
+    let rowIndexToDelete = -1; // 1-based index
+    const deletedStudentChoices: Record<string, string> = {}; // subjectName: facultyName
+
+    for (let i = 1; i < rows.length; i++) { // Start from 1 to skip header row
+      const row = rows[i] as string[];
+      if (row[rollNumberColumnIndex] === rollNumberToDelete) {
+        rowIndexToDelete = i + 1; // Sheets are 1-indexed
+        
+        // Extract choices
+        headers.forEach((header, colIndex) => {
+            // Assuming columns from "WhatsApp Number" + 1 onwards are subject selections
+            // A more robust way would be to explicitly list subject columns or have a convention
+            if (colIndex > headers.findIndex(h => h.toLowerCase() === 'whatsapp number') && row[colIndex]) {
+                 // Store as "Subject Name": "Faculty Name"
+                deletedStudentChoices[header] = row[colIndex];
+            }
+        });
+        break;
+      }
+    }
+
+    if (rowIndexToDelete === -1) {
+      console.log(`[Google Sheets Service] Roll number "${rollNumberToDelete}" not found in sheet.`);
+      return { success: false, error: `Student with roll number "${rollNumberToDelete}" not found.` };
+    }
+    console.log(`[Google Sheets Service] Found roll number "${rollNumberToDelete}" at row ${rowIndexToDelete}. Choices:`, deletedStudentChoices);
+
+    // 3. Delete the row
+    console.log(`[Google Sheets Service] Preparing to delete row ${rowIndexToDelete} (0-indexed: ${rowIndexToDelete -1}) from sheetId ${sheetId}.`);
+    const batchUpdateRequest: sheets_v4.Params$Resource$Spreadsheets$Batchupdate = {
+      spreadsheetId: SPREADSHEET_ID,
+      requestBody: {
+        requests: [
+          {
+            deleteDimension: {
+              range: {
+                sheetId: sheetId,
+                dimension: 'ROWS',
+                startIndex: rowIndexToDelete - 1, // 0-indexed
+                endIndex: rowIndexToDelete,     // Exclusive
+              },
+            },
+          },
+        ],
+      },
+    };
+
+    const deleteResponse = await sheets.spreadsheets.batchUpdate(batchUpdateRequest);
+    console.log('[Google Sheets Service] Delete row batchUpdate API response status:', deleteResponse.status);
+
+    if (deleteResponse.status === 200) {
+      console.log(`[Google Sheets Service] Successfully deleted row ${rowIndexToDelete} for roll number "${rollNumberToDelete}".`);
+      return { success: true, deletedStudentChoices };
+    } else {
+      console.error(`[Google Sheets Service] Failed to delete row. Status: ${deleteResponse.status}`, deleteResponse.data);
+      return { success: false, error: `Failed to delete row from sheet. Status: ${deleteResponse.status}` };
+    }
+  } catch (error: any) {
+    console.error(`[Google Sheets Service] Error deleting row for roll number "${rollNumberToDelete}":`, error.message);
+    if (error.errors) console.error('[Google Sheets Service] Google API specific errors:', error.errors);
+    return { success: false, error: `An unexpected error occurred while deleting the row: ${error.message}` };
   }
 }
