@@ -4,7 +4,7 @@ import { getSubjects, getFaculties, getFacultySlots, resetAllFacultySlots } from
 
 export default async function Home() {
   // Optional: Reset slots on each page load for demo purposes if persistence across sessions is not desired.
-  await resetAllFacultySlots(); 
+  // await resetAllFacultySlots(); 
   // Comment out above line if you want slots to persist (in memory on server) across reloads until server restarts.
 
   const subjects = await getSubjects();
