@@ -1,3 +1,4 @@
+
 'use server';
 
 import { google } from 'googleapis';
@@ -44,7 +45,7 @@ export async function appendToSheet(rowData: any[][]): Promise<boolean> {
 
   const sheets = await getSheetsClient();
   if (!sheets) {
-    console.error('[Google Sheets Service] Sheet client not available. Cannot append to sheet.');
+    console.error('[Google Sheets Service] Sheet client not available for append. Cannot append to sheet.');
     return false;
   }
 
@@ -90,7 +91,7 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
   
   const sheets = await getSheetsClient();
   if (!sheets) {
-    console.error('[Google Sheets Service] Sheet client not available. Cannot ensure headers.');
+    console.error('[Google Sheets Service] Sheet client not available for headers. Cannot ensure headers.');
     return false;
   }
 
@@ -114,14 +115,11 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
     
     if (!headersMatch) {
       console.log('[Google Sheets Service] Headers are missing or incorrect. Writing new headers.');
-      await sheets.spreadsheets.values.clear({ // Clear the first row before updating
-        spreadsheetId: SPREADSHEET_ID,
-        range: range,
-      });
-      console.log('[Google Sheets Service] Cleared first row for headers.');
+      // It's safer to clear only if we are sure we need to update, and if the sheet is supposed to be managed by this app.
+      // For now, just update. If the row exists, it's updated. If not, it's created if permissions allow.
       const updateResponse = await sheets.spreadsheets.values.update({
         spreadsheetId: SPREADSHEET_ID,
-        range: range,
+        range: range, // Update the first row
         valueInputOption: 'USER_ENTERED',
         requestBody: {
           values: [expectedHeaders],
@@ -135,12 +133,12 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
     return true;
   } catch (error: any) {
     console.error('[Google Sheets Service] Failed to ensure sheet headers (exception caught):', error.message);
-    if (error.code === 404 || (error.errors && error.errors.some((e: any) => e.reason === 'notFound' || e.message.includes('Unable to parse range')))) {
+     if (error.code === 404 || (error.errors && error.errors.some((e: any) => e.reason === 'notFound' || e.message.includes('Unable to parse range')))) {
         console.warn(`[Google Sheets Service] Sheet "${SHEET_NAME}" or range might not be found in spreadsheet "${SPREADSHEET_ID}". Attempting to write headers (which might create the sheet or row).`);
          try {
             const createResponse = await sheets.spreadsheets.values.update({
                 spreadsheetId: SPREADSHEET_ID,
-                range: `${SHEET_NAME}!A1`, // Writing to A1 can help create if not exists
+                range: `${SHEET_NAME}!A1`, 
                 valueInputOption: 'USER_ENTERED',
                 requestBody: {
                     values: [expectedHeaders],
@@ -163,5 +161,59 @@ export async function ensureSheetHeaders(expectedHeaders: string[]): Promise<boo
         console.error('[Google Sheets Service] Google API specific errors from ensureSheetHeaders exception:', (error as any).errors);
     }
     return false;
+  }
+}
+
+export async function getSheetData(): Promise<any[] | null> {
+  console.log('[Google Sheets Service] Attempting to get all sheet data...');
+  if (!SPREADSHEET_ID) {
+    console.error('[Google Sheets Service] SPREADSHEET_ID environment variable is not set. Cannot read sheet data.');
+    return null;
+  }
+
+  const sheets = await getSheetsClient();
+  if (!sheets) {
+    console.error('[Google Sheets Service] Sheet client not available for get. Cannot read sheet data.');
+    return null;
+  }
+
+  try {
+    // Attempt to get all data. This assumes a reasonable number of columns; adjust if necessary.
+    // Example: 'Sheet1!A:Z' or more specific if known. Or simply SHEET_NAME to get all cells.
+    const range = `${SHEET_NAME}`; 
+    console.log(`[Google Sheets Service] Getting data from range: ${range}`);
+
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: SPREADSHEET_ID,
+      range: range,
+    });
+    console.log('[Google Sheets Service] Get All Data API response status:', response.status);
+
+    const rows = response.data.values;
+    if (rows && rows.length) {
+      console.log(`[Google Sheets Service] Successfully retrieved ${rows.length} rows.`);
+      // Convert array of arrays to array of objects using the first row as headers
+      const headers = rows[0] as string[];
+      const data = rows.slice(1).map(rowArray => {
+        let obj: {[key: string]: string} = {};
+        headers.forEach((header, index) => {
+          obj[header] = rowArray[index];
+        });
+        return obj;
+      });
+      return data;
+    } else {
+      console.log('[Google Sheets Service] No data found in the sheet or sheet is empty.');
+      return [];
+    }
+  } catch (error: any) {
+    console.error('[Google Sheets Service] Failed to get sheet data (exception caught):', error.message);
+    if (error.code === 403) {
+        console.error('[Google Sheets Service] Permission denied (403) while trying to read sheet. Check service account read permissions.');
+    }
+    if (error instanceof Error && 'errors' in error) {
+        console.error('[Google Sheets Service] Google API specific errors from getSheetData exception:', (error as any).errors);
+    }
+    return null; // Indicates an error occurred rather than empty data
   }
 }
