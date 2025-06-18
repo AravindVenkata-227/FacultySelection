@@ -10,7 +10,10 @@ import {
   writeBatch, 
   Timestamp,
   runTransaction,
-  serverTimestamp
+  serverTimestamp,
+  query,
+  where,
+  limit
 } from 'firebase/firestore';
 
 export interface Faculty {
@@ -33,6 +36,14 @@ export interface StudentSubmission {
   whatsappNumber: string;
   timestamp: Timestamp;
   selections: Record<string, string>; // subjectId -> facultyId
+}
+
+// Admin Session data structure for Firestore
+export interface AdminSession {
+  sessionId: string; // Document ID will be the sessionId
+  userId: string; // e.g., 'admin'
+  createdAt: Timestamp;
+  expiresAt: Timestamp;
 }
 
 
@@ -68,6 +79,7 @@ const _subjects: Subject[] = [
 
 const FACULTY_SLOTS_COLLECTION = 'facultySubjectSlots';
 const STUDENT_SUBMISSIONS_COLLECTION = 'studentSubmissions';
+const ADMIN_SESSIONS_COLLECTION = 'adminSessions';
 
 export async function getFaculties(): Promise<Faculty[]> {
   return JSON.parse(JSON.stringify(_faculties));
@@ -104,18 +116,15 @@ async function ensureSlotDocument(facultyId: string, subjectId: string): Promise
       if (typeof data.slots === 'number') {
         return data.slots;
       } else {
-        // Data exists but is malformed, reset it.
         await setDoc(slotDocRef, { slots: faculty.initialSlots });
         return faculty.initialSlots;
       }
     } else {
-      // Document does not exist, create it.
       await setDoc(slotDocRef, { slots: faculty.initialSlots });
       return faculty.initialSlots;
     }
   } catch (error) {
     console.error(`Error ensuring slot document for ${slotKey}:`, error);
-    // Fallback to initial slots in case of read/write error during ensure
     return faculty.initialSlots; 
   }
 }
@@ -132,7 +141,7 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
           slots[slotKey] = await ensureSlotDocument(faculty.id, subject.id);
         } catch (error) {
           console.error(`Failed to fetch/ensure slot for ${slotKey}, defaulting to initial:`, error);
-          slots[slotKey] = faculty.initialSlots; // Fallback
+          slots[slotKey] = faculty.initialSlots;
         }
       }
     }
@@ -150,10 +159,8 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
       let currentSlotValue;
 
       if (!slotDoc.exists()) {
-        // Attempt to initialize if document doesn't exist
         const faculty = _faculties.find(f => f.id === facultyId);
         if (!faculty) throw new Error(`Faculty ${facultyId} not found during slot update.`);
-        console.warn(`Slot document ${slotKey} did not exist. Initializing with ${faculty.initialSlots} slots.`);
         currentSlotValue = faculty.initialSlots; 
       } else {
         currentSlotValue = slotDoc.data().slots;
@@ -164,7 +171,7 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
       }
 
       if (currentSlotValue > 0) {
-        transaction.set(slotDocRef, { slots: currentSlotValue - 1 }, { merge: !slotDoc.exists() }); // merge if creating
+        transaction.set(slotDocRef, { slots: currentSlotValue - 1 }, { merge: !slotDoc.exists() });
         return { success: true, currentSlots: currentSlotValue - 1 };
       } else {
         return { success: false, error: 'No slots available for this faculty in this subject.', currentSlots: 0 };
@@ -192,11 +199,7 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
       let currentSlotValue;
 
       if (!slotDoc.exists()) {
-        // This case should ideally not happen if deletion always follows a successful submission.
-        // If it does, it means we're trying to increment a slot that wasn't decremented from a known state.
-        // We'll initialize it to 1 assuming it's a restoration after a problem, but cap at initialSlots.
-        console.warn(`Slot document ${slotKey} did not exist during increment. Initializing to 1.`);
-        currentSlotValue = 0; // Treat as if it was 0 before incrementing
+        currentSlotValue = 0;
       } else {
         currentSlotValue = slotDoc.data().slots;
       }
@@ -209,9 +212,7 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
         transaction.set(slotDocRef, { slots: currentSlotValue + 1 }, { merge: !slotDoc.exists() });
         return { success: true, currentSlots: currentSlotValue + 1 };
       } else {
-        // Already at max capacity, no change needed or possible.
-        console.warn(`Slot for ${slotKey} is already at max capacity (${maxSlots}). Not incrementing.`);
-        return { success: true, currentSlots: maxSlots }; // Still success, just no change.
+        return { success: true, currentSlots: maxSlots }; 
       }
     });
   } catch (error: any) {
@@ -221,7 +222,6 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
 }
 
 export async function resetAllFacultySlots(): Promise<void> {
-  console.log('Attempting to reset all faculty slots in Firestore...');
   const batch = writeBatch(db);
   _subjects.forEach(subject => {
     subject.facultyOptions.forEach(facultyId => {
@@ -235,10 +235,9 @@ export async function resetAllFacultySlots(): Promise<void> {
   });
   try {
     await batch.commit();
-    console.log('All faculty slots successfully reset in Firestore.');
   } catch (error) {
     console.error('Error resetting faculty slots in Firestore:', error);
-    throw error; // Re-throw to be handled by caller if needed
+    throw error;
   }
 }
 
@@ -249,7 +248,7 @@ export async function addStudentSubmission(submissionData: Omit<StudentSubmissio
   try {
     await setDoc(submissionDocRef, {
       ...submissionData,
-      timestamp: serverTimestamp(), // Use server timestamp for consistency
+      timestamp: serverTimestamp(),
     });
     return { success: true };
   } catch (error: any) {
@@ -268,18 +267,19 @@ export async function getStudentSubmissionByRollNumber(rollNumber: string): Prom
     return null;
   } catch (error) {
     console.error(`Error fetching student submission for ${rollNumber}:`, error);
-    return null; // Or throw, depending on desired error handling
+    return null;
   }
 }
 
 export async function getAllStudentSubmissions(): Promise<StudentSubmission[]> {
   const submissions: StudentSubmission[] = [];
   try {
-    const querySnapshot = await getDocs(collection(db, STUDENT_SUBMISSIONS_COLLECTION));
+    const q = query(collection(db, STUDENT_SUBMISSIONS_COLLECTION)); // Removed orderBy for simplicity, can be added back if needed
+    const querySnapshot = await getDocs(q);
     querySnapshot.forEach((docSnap) => {
       submissions.push(docSnap.data() as StudentSubmission);
     });
-    // Sort by timestamp if needed, Firestore might not guarantee order by default on getDocs
+     // Sort by timestamp client-side if necessary, or ensure Firestore index for server-side sorting
     submissions.sort((a, b) => {
         const tsA = a.timestamp?.toDate?.() || new Date(0);
         const tsB = b.timestamp?.toDate?.() || new Date(0);
@@ -288,7 +288,7 @@ export async function getAllStudentSubmissions(): Promise<StudentSubmission[]> {
     return submissions;
   } catch (error) {
     console.error("Error fetching all student submissions:", error);
-    return []; // Return empty array on error, or throw
+    return [];
   }
 }
 
@@ -307,3 +307,53 @@ export async function deleteStudentSubmission(rollNumber: string): Promise<{succ
     return { success: false, error: error.message || "Failed to delete submission from database." };
   }
 }
+
+// --- Admin Session Functions ---
+export async function createAdminSession(sessionId: string, userId: string, expiresAt: Date): Promise<{ success: boolean; error?: string }> {
+  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
+  try {
+    await setDoc(sessionDocRef, {
+      userId: userId,
+      createdAt: serverTimestamp(),
+      expiresAt: Timestamp.fromDate(expiresAt),
+    });
+    return { success: true };
+  } catch (error: any) {
+    console.error(`Error creating admin session ${sessionId}:`, error);
+    return { success: false, error: error.message || "Failed to create admin session." };
+  }
+}
+
+export async function getAdminSession(sessionId: string): Promise<AdminSession | null> {
+  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
+  try {
+    const docSnap = await getDoc(sessionDocRef);
+    if (docSnap.exists()) {
+      const session = docSnap.data() as Omit<AdminSession, 'sessionId'>;
+      // Check for expiry server-side
+      if (session.expiresAt.toDate() < new Date()) {
+        await deleteAdminSession(sessionId); // Clean up expired session
+        return null;
+      }
+      return { ...session, sessionId: docSnap.id };
+    }
+    return null;
+  } catch (error) {
+    console.error(`Error fetching admin session ${sessionId}:`, error);
+    return null;
+  }
+}
+
+export async function deleteAdminSession(sessionId: string): Promise<{ success: boolean; error?: string }> {
+  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
+  try {
+    await deleteDoc(sessionDocRef);
+    return { success: true };
+  } catch (error: any)
+ {
+    console.error(`Error deleting admin session ${sessionId}:`, error);
+    return { success: false, error: error.message || "Failed to delete admin session." };
+  }
+}
+
+    
