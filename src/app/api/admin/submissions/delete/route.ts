@@ -30,14 +30,14 @@ export async function POST(request: NextRequest) {
     console.log('[API Delete Submission] Submission deleted from sheet. Restoring faculty slots. Choices extracted:', deleteResult.deletedStudentChoices);
     
     const allFaculties: Faculty[] = await getFaculties();
-    const allSubjects: Subject[] = await getSubjects();
+    const allSubjects: Subject[] = await getSubjects(); // Fetch all subjects
     let slotRestorationErrors: string[] = [];
     let slotsSuccessfullyRestoredCount = 0;
 
     for (const [subjectName, facultyName] of Object.entries(deleteResult.deletedStudentChoices)) {
       console.log(`[API Delete Submission] Processing choice - Subject: "${subjectName}", Faculty: "${facultyName}"`);
       
-      const subject = allSubjects.find(s => s.name === subjectName);
+      const subject = allSubjects.find(s => s.name === subjectName); // Corrected: Search in allSubjects
       const faculty = allFaculties.find(f => f.name === facultyName);
 
       if (subject && faculty) {
