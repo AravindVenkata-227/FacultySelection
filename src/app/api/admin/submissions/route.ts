@@ -3,6 +3,8 @@ import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSheetData } from '@/services/google-sheets-service';
 
+export const dynamic = 'force-dynamic'; // Opt into dynamic behavior
+
 export async function GET(request: NextRequest) {
   const cookieStore = cookies();
   const authToken = cookieStore.get('admin-auth-token')?.value;
@@ -22,3 +24,4 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ message: 'Failed to fetch submissions' }, { status: 500 });
   }
 }
+
