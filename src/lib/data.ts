@@ -140,26 +140,24 @@ export function incrementFacultySlotSync(facultyId: string, subjectId: string): 
   const subject = _subjects.find(s => s.id === subjectId);
 
   if (!faculty || !subject || !subject.facultyOptions.includes(facultyId)) {
+    console.error(`[Increment Slot] Invalid attempt: Faculty ${facultyId} for Subject ${subjectId} not found or not assigned.`);
     return { success: false, error: 'Faculty not assigned to this subject or invalid IDs for slot increment.' };
   }
 
+  const facultyName = faculty.name;
+  const subjectName = subject.name;
+  const currentVal = facultySlotsData[key]; // Get value before potential undefined check
+
   if (facultySlotsData[key] === undefined) {
-    // This case should ideally not happen if data is consistent
-    console.warn(`Slot key ${key} was undefined during increment. Setting to 1.`);
-    facultySlotsData[key] = 1; // Or faculty.initialSlots if that's preferred, but 1 seems safer if it was 0.
+    // This case should ideally not happen if data is consistent from submissions
+    console.warn(`[Increment Slot] Slot key ${key} (${facultyName} - ${subjectName}) was undefined during increment. Initializing to 1 based on assumption of restoration. Max initial was ${faculty.initialSlots}.`);
+    facultySlotsData[key] = 1; 
   } else {
-    // Only increment if it's less than initial slots to prevent over-incrementing beyond original capacity
-    // This check assumes faculty.initialSlots is the max for that specific subject pairing.
-    const targetFacultyForSubject = _faculties.find(f => f.id === facultyId);
-    if (targetFacultyForSubject && facultySlotsData[key] < targetFacultyForSubject.initialSlots) {
+    if (facultySlotsData[key] < faculty.initialSlots) {
       facultySlotsData[key]++;
-    } else if (targetFacultyForSubject && facultySlotsData[key] >= targetFacultyForSubject.initialSlots) {
-      console.warn(`Slot key ${key} for faculty ${facultyId} / subject ${subjectId} is already at or above initial capacity (${targetFacultyForSubject.initialSlots}). Not incrementing.`);
-      // Optionally return an error or different status if incrementing beyond initial is an issue.
-      // For now, we just don't increment.
+      console.log(`[Increment Slot] Slot for ${key} (${facultyName} - ${subjectName}) incremented from ${currentVal} to ${facultySlotsData[key]}. Initial max was ${faculty.initialSlots}.`);
     } else {
-         // Fallback if targetFacultyForSubject not found, just increment (less safe)
-         facultySlotsData[key]++;
+      console.warn(`[Increment Slot] Slot for ${key} (${facultyName} - ${subjectName}) is already at or above initial capacity (${faculty.initialSlots}). Current: ${facultySlotsData[key]}. Not incrementing.`);
     }
   }
   return { success: true, currentSlots: facultySlotsData[key] };
