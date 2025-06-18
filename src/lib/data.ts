@@ -13,6 +13,7 @@ import {
   serverTimestamp,
   query,
   where,
+  orderBy,
   limit
 } from 'firebase/firestore';
 
@@ -97,7 +98,6 @@ export async function getSubjectById(id: string): Promise<Subject | undefined> {
   return _subjects.find(s => s.id === id);
 }
 
-// Initialize slots if they don't exist, or ensure they match _faculties definition
 async function ensureSlotDocument(facultyId: string, subjectId: string): Promise<number> {
   const faculty = _faculties.find(f => f.id === facultyId);
   const subject = _subjects.find(s => s.id === subjectId);
@@ -199,7 +199,7 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
       let currentSlotValue;
 
       if (!slotDoc.exists()) {
-        currentSlotValue = 0;
+        currentSlotValue = 0; 
       } else {
         currentSlotValue = slotDoc.data().slots;
       }
@@ -235,13 +235,14 @@ export async function resetAllFacultySlots(): Promise<void> {
   });
   try {
     await batch.commit();
+    console.log('All faculty slots have been reset in Firestore.');
   } catch (error) {
     console.error('Error resetting faculty slots in Firestore:', error);
     throw error;
   }
 }
 
-// --- Student Submission Functions ---
+// --- Student Submission Functions (Firestore) ---
 
 export async function addStudentSubmission(submissionData: Omit<StudentSubmission, 'timestamp'>): Promise<{success: boolean, error?: string}> {
   const submissionDocRef = doc(db, STUDENT_SUBMISSIONS_COLLECTION, submissionData.rollNumber);
@@ -252,8 +253,8 @@ export async function addStudentSubmission(submissionData: Omit<StudentSubmissio
     });
     return { success: true };
   } catch (error: any) {
-    console.error(`Error adding student submission for ${submissionData.rollNumber}:`, error);
-    return { success: false, error: error.message || "Failed to save submission to database." };
+    console.error(`Error adding student submission for ${submissionData.rollNumber} to Firestore:`, error);
+    return { success: false, error: error.message || "Failed to save submission to Firestore." };
   }
 }
 
@@ -266,29 +267,23 @@ export async function getStudentSubmissionByRollNumber(rollNumber: string): Prom
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching student submission for ${rollNumber}:`, error);
-    return null;
+    console.error(`Error fetching student submission for ${rollNumber} from Firestore:`, error);
+    return null; 
   }
 }
 
-export async function getAllStudentSubmissions(): Promise<StudentSubmission[]> {
+export async function getAllStudentSubmissions(): Promise<StudentSubmission[] | null> {
   const submissions: StudentSubmission[] = [];
   try {
-    const q = query(collection(db, STUDENT_SUBMISSIONS_COLLECTION)); // Removed orderBy for simplicity, can be added back if needed
+    const q = query(collection(db, STUDENT_SUBMISSIONS_COLLECTION), orderBy("timestamp", "desc"));
     const querySnapshot = await getDocs(q);
     querySnapshot.forEach((docSnap) => {
       submissions.push(docSnap.data() as StudentSubmission);
     });
-     // Sort by timestamp client-side if necessary, or ensure Firestore index for server-side sorting
-    submissions.sort((a, b) => {
-        const tsA = a.timestamp?.toDate?.() || new Date(0);
-        const tsB = b.timestamp?.toDate?.() || new Date(0);
-        return tsB.getTime() - tsA.getTime(); // Descending by time
-    });
     return submissions;
   } catch (error) {
-    console.error("Error fetching all student submissions:", error);
-    return [];
+    console.error("Error fetching all student submissions from Firestore:", error);
+    return null; 
   }
 }
 
@@ -297,18 +292,18 @@ export async function deleteStudentSubmission(rollNumber: string): Promise<{succ
   try {
     const docSnap = await getDoc(submissionDocRef);
     if (!docSnap.exists()) {
-      return { success: false, error: "Submission not found." };
+      return { success: false, error: "Submission not found in Firestore." };
     }
     const deletedData = docSnap.data() as StudentSubmission;
     await deleteDoc(submissionDocRef);
     return { success: true, deletedData };
   } catch (error: any) {
-    console.error(`Error deleting student submission for ${rollNumber}:`, error);
-    return { success: false, error: error.message || "Failed to delete submission from database." };
+    console.error(`Error deleting student submission for ${rollNumber} from Firestore:`, error);
+    return { success: false, error: error.message || "Failed to delete submission from Firestore." };
   }
 }
 
-// --- Admin Session Functions ---
+// --- Admin Session Functions (Firestore) ---
 export async function createAdminSession(sessionId: string, userId: string, expiresAt: Date): Promise<{ success: boolean; error?: string }> {
   const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
   try {
@@ -319,8 +314,8 @@ export async function createAdminSession(sessionId: string, userId: string, expi
     });
     return { success: true };
   } catch (error: any) {
-    console.error(`Error creating admin session ${sessionId}:`, error);
-    return { success: false, error: error.message || "Failed to create admin session." };
+    console.error(`Error creating admin session ${sessionId} in Firestore:`, error);
+    return { success: false, error: error.message || "Failed to create admin session in Firestore." };
   }
 }
 
@@ -329,17 +324,16 @@ export async function getAdminSession(sessionId: string): Promise<AdminSession |
   try {
     const docSnap = await getDoc(sessionDocRef);
     if (docSnap.exists()) {
-      const session = docSnap.data() as Omit<AdminSession, 'sessionId'>;
-      // Check for expiry server-side
+      const session = docSnap.data() as Omit<AdminSession, 'sessionId'>; // Base data from Firestore
       if (session.expiresAt.toDate() < new Date()) {
-        await deleteAdminSession(sessionId); // Clean up expired session
+        await deleteAdminSession(sessionId); 
         return null;
       }
-      return { ...session, sessionId: docSnap.id };
+      return { ...session, sessionId: docSnap.id }; // Add sessionId to the returned object
     }
     return null;
   } catch (error) {
-    console.error(`Error fetching admin session ${sessionId}:`, error);
+    console.error(`Error fetching admin session ${sessionId} from Firestore:`, error);
     return null;
   }
 }
@@ -349,11 +343,9 @@ export async function deleteAdminSession(sessionId: string): Promise<{ success: 
   try {
     await deleteDoc(sessionDocRef);
     return { success: true };
-  } catch (error: any)
- {
-    console.error(`Error deleting admin session ${sessionId}:`, error);
-    return { success: false, error: error.message || "Failed to delete admin session." };
+  } catch (error: any) {
+    console.error(`Error deleting admin session ${sessionId} from Firestore:`, error);
+    return { success: false, error: error.message || "Failed to delete admin session from Firestore." };
   }
 }
-
     

@@ -10,8 +10,8 @@ const SESSION_DURATION_HOURS = 24; // Session duration in hours
 
 export async function POST(request: NextRequest) {
   if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-    console.error('Admin credentials are not set in environment variables.');
-    return NextResponse.json({ message: 'Server configuration error.' }, { status: 500 });
+    console.error('Admin credentials (ADMIN_USERNAME, ADMIN_PASSWORD) are not set in environment variables.');
+    return NextResponse.json({ message: 'Server configuration error related to admin credentials.' }, { status: 500 });
   }
 
   try {
@@ -21,11 +21,13 @@ export async function POST(request: NextRequest) {
       const sessionId = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
 
+      // Attempt to create a session in Firestore
       const sessionResult = await createAdminSession(sessionId, 'admin_user', expiresAt);
 
       if (!sessionResult.success) {
+        // Log the specific error from createAdminSession if available
         console.error('Failed to create admin session in Firestore:', sessionResult.error);
-        return NextResponse.json({ message: 'Login failed due to a server error.' }, { status: 500 });
+        return NextResponse.json({ message: 'Login failed due to a server error (session creation). Refer to server logs for details.' }, { status: 500 });
       }
 
       const cookieStore = cookies();
@@ -33,8 +35,8 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        maxAge: SESSION_DURATION_HOURS * 60 * 60, // maxAge in seconds
-        sameSite: 'lax', // Or 'strict'
+        maxAge: SESSION_DURATION_HOURS * 60 * 60, 
+        sameSite: 'lax',
       });
       return NextResponse.json({ message: 'Login successful' }, { status: 200 });
     } else {
@@ -42,8 +44,7 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error('Login API error:', error);
-    return NextResponse.json({ message: 'An internal error occurred' }, { status: 500 });
+    return NextResponse.json({ message: 'An internal error occurred during login processing.' }, { status: 500 });
   }
 }
-
     
