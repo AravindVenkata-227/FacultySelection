@@ -211,6 +211,26 @@ export async function getSheetData(): Promise<any[] | null> {
   }
 }
 
+export async function getRollNumbersFromSheet(): Promise<string[] | null> {
+  console.log('[Google Sheets Service] Attempting to get all roll numbers from sheet...');
+  const allData = await getSheetData(); // This already handles headers and returns objects or null/empty array
+
+  if (allData === null) { // Error fetching data
+    console.error('[Google Sheets Service] Failed to retrieve sheet data for roll number check.');
+    return null;
+  }
+  if (allData.length === 0) { // Sheet is empty or has only headers
+    console.log('[Google Sheets Service] No student data found in sheet for roll number check.');
+    return [];
+  }
+
+  // Assuming "Roll Number" is a header. If not, this will filter out undefineds.
+  const rollNumbers = allData.map(row => row['Roll Number']).filter(Boolean);
+  console.log(`[Google Sheets Service] Retrieved ${rollNumbers.length} roll numbers from sheet.`);
+  return rollNumbers;
+}
+
+
 export async function deleteSheetRowByRollNumber(
   rollNumberToDelete: string
 ): Promise<{ success: boolean; error?: string; deletedStudentChoices?: Record<string, string> }> {
@@ -273,7 +293,8 @@ export async function deleteSheetRowByRollNumber(
         headers.forEach((header, colIndex) => {
             // Assuming columns from "WhatsApp Number" + 1 onwards are subject selections
             // A more robust way would be to explicitly list subject columns or have a convention
-            if (colIndex > headers.findIndex(h => h.toLowerCase() === 'whatsapp number') && row[colIndex]) {
+            const whatsAppIndex = headers.findIndex(h => h.toLowerCase() === 'whatsapp number');
+            if (whatsAppIndex !== -1 && colIndex > whatsAppIndex && row[colIndex]) {
                  // Store as "Subject Name": "Faculty Name"
                 deletedStudentChoices[header] = row[colIndex];
             }

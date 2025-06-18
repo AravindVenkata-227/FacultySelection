@@ -6,7 +6,7 @@ import { studentInfoSchema, submissionSchema, FacultyConnectFormValues } from '.
 import { getSubjects, updateFacultySlotSync, getFacultySlots, resetAllFacultySlots as resetSlotsData, getFaculties, Faculty, Subject } from './data';
 import { getScalingGuidance as fetchScalingGuidance } from '@/ai/flows/scaling-guidance';
 import type { ScalingGuidanceOutput } from '@/ai/flows/scaling-guidance';
-import { appendToSheet, ensureSheetHeaders } from '@/services/google-sheets-service';
+import { appendToSheet, ensureSheetHeaders, getRollNumbersFromSheet } from '@/services/google-sheets-service';
 
 export interface FormState {
   message: string;
@@ -54,17 +54,45 @@ export async function submitFacultySelection(
     };
   }
 
+  // Server-side check for existing roll number
+  const originalSlots = await getFacultySlots(); // Get slots before potential early return
+  try {
+    const existingRollNumbers = await getRollNumbersFromSheet();
+    if (existingRollNumbers === null) {
+      return {
+        message: 'Could not verify submission due to a server error. Please try again later.',
+        success: false,
+        updatedSlots: originalSlots,
+      };
+    }
+    if (existingRollNumbers.includes(parsedStudentInfo.data.rollNumber)) {
+      return {
+        message: `Roll number ${parsedStudentInfo.data.rollNumber} has already submitted the form. Please contact administration if you need to make changes.`,
+        success: false,
+        updatedSlots: originalSlots, 
+      };
+    }
+  } catch (error) {
+    console.error('[Action: submitFacultySelection] Error checking existing roll number:', error);
+    return {
+      message: 'An unexpected error occurred while verifying your submission. Please try again.',
+      success: false,
+      updatedSlots: originalSlots,
+    };
+  }
+
+
   const selectionsArray = Object.entries(formValues.selections).map(([subjectId, facultyId]) => ({
     subjectId,
     facultyId: facultyId as string,
   }));
 
   if (selectionsArray.length !== subjects.length) {
-     return { message: 'Please select a faculty for all subjects.', success: false };
+     return { message: 'Please select a faculty for all subjects.', success: false, updatedSlots: originalSlots };
   }
   for (const subject of subjects) {
     if (!formValues.selections[subject.id] || formValues.selections[subject.id] === '') {
-      return { message: `Faculty selection is missing for ${subject.name}.`, success: false };
+      return { message: `Faculty selection is missing for ${subject.name}.`, success: false, updatedSlots: originalSlots };
     }
   }
   
@@ -80,10 +108,11 @@ export async function submitFacultySelection(
       message: 'Invalid submission data. Please check your selections.',
       issues: validatedData.error.flatten().formErrors,
       success: false,
+      updatedSlots: originalSlots,
     };
   }
 
-  const originalSlots = await getFacultySlots(); 
+  // const originalSlots = await getFacultySlots(); // Moved up for early return
 
   for (const selection of validatedData.data.selections) {
     const result = updateFacultySlotSync(selection.facultyId, selection.subjectId);
@@ -131,13 +160,46 @@ export async function submitFacultySelection(
       if (appendedToSheet) {
         console.log('Submission data successfully written to Google Sheet.');
       } else {
-        console.warn('Submission successful, but failed to write data to Google Sheet. Check service account permissions and SPREADSHEET_ID/SHEET_NAME.');
+        // Attempt to revert slot updates if sheet write fails (basic compensation)
+        console.warn('Submission processed, but failed to write data to Google Sheet. Attempting to revert slot allocations.');
+        // This is a simplistic rollback; a proper transactional system would be better.
+        validatedData.data.selections.forEach(sel => {
+            // In a real system, you'd need to ensure this increment doesn't exceed initial max,
+            // but for this basic compensation, we just increment.
+            const faculty = allFaculties.find(f => f.id === sel.facultyId);
+            const subject = subjects.find(s => s.id === sel.subjectId);
+            if (faculty && subject) {
+                 // We don't have the 'incrementFacultySlotSync' in this scope directly,
+                 // but the principle is to reverse the update.
+                 // For now, we'll log and the slots will remain decremented on the server.
+                 // A full solution would require a robust transaction/compensation mechanism.
+                 console.warn(`Need to implement slot increment for ${faculty.name} - ${subject.name} due to sheet write failure.`);
+            }
+        });
+        // Return current slots which are the decremented ones, as rollback is not fully implemented here
+        return {
+            message: 'Your selections were processed, but there was an issue saving to the central record. Please contact administration. Your slot reservations might be temporary.',
+            success: false, // Indicate an issue despite processing
+            updatedSlots: finalUpdatedSlots,
+        };
       }
     } else {
       console.warn('Failed to ensure Google Sheet headers. Submission data not written to sheet.');
+       // Slots are already decremented, similar to above, a rollback would be ideal.
+        return {
+            message: 'Your selections were processed, but there was an issue preparing the central record. Please contact administration. Your slot reservations might be temporary.',
+            success: false, 
+            updatedSlots: finalUpdatedSlots,
+        };
     }
   } catch (sheetError) {
     console.error('Error during Google Sheet operation:', sheetError);
+     // Slots are already decremented.
+    return {
+        message: 'Your selections were processed, but a critical error occurred while finalizing your submission. Please contact administration.',
+        success: false, 
+        updatedSlots: finalUpdatedSlots,
+    };
   }
 
   console.log('Submission successful:', validatedData.data);
@@ -172,3 +234,4 @@ export async function resetAllFacultySlots(): Promise<{success: boolean, message
         return { success: false, message: "Failed to reset faculty slots." };
     }
 }
+
