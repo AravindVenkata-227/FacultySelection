@@ -7,14 +7,14 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 // You can find this configuration in the Firebase console:
 // Project settings > General > Your apps > Web app > SDK setup and configuration
 const firebaseConfig = {
-  apiKey: 'YOUR_API_KEY_HERE',
-  authDomain: 'YOUR_AUTH_DOMAIN_HERE',
-  projectId: 'YOUR_PROJECT_ID_HERE',
-  storageBucket: 'YOUR_STORAGE_BUCKET_HERE',
-  messagingSenderId: 'YOUR_MESSAGING_SENDER_ID_HERE',
-  appId: 'YOUR_APP_ID_HERE',
-  // measurementId: 'YOUR_MEASUREMENT_ID_HERE' // Optional: add if you use Google Analytics
+  apiKey: "AIzaSyDfapu5biuvKY1PT90ZoOaLn_YLv4owpeQ",
+  authDomain: "faculty-connect-owcc7.firebaseapp.com",
+  projectId: "faculty-connect-owcc7",
+  storageBucket: "faculty-connect-owcc7.firebasestorage.app",
+  messagingSenderId: "336783424106",
+  appId: "1:336783424106:web:0f45c49122c1246075a813"
 };
+
 
 let app: FirebaseApp;
 let db: Firestore;
