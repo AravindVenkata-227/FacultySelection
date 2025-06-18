@@ -31,7 +31,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet, Trash2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Submission {
@@ -193,6 +193,9 @@ export default function AdminDashboardPage() {
           </h1>
         </div>
         <div className="ml-auto flex items-center gap-2">
+           <Button onClick={fetchData} variant="outline" size="sm" disabled={isLoading}>
+            <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} /> Refresh
+          </Button>
           <Button onClick={handleDownload} variant="outline" size="sm" disabled={isLoading || submissions.length === 0}>
             <Download className="mr-2 h-4 w-4" /> Download CSV
           </Button>
@@ -304,4 +307,5 @@ export default function AdminDashboardPage() {
       </footer>
     </div>
   );
-}
+
+    
