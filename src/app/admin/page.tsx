@@ -35,14 +35,19 @@ import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet, Trash
 import { useToast } from '@/hooks/use-toast';
 
 interface Submission {
-  [key: string]: string;
+  [key: string]: string | number; // Allow number for potential rowIndex if added by client
+  Timestamp: string;
+  "Roll Number": string;
+  Name: string;
+  "Email ID": string;
+  "WhatsApp Number": string;
 }
 
 export default function AdminDashboardPage() {
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [headers, setHeaders] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null); // Stores rollNumber being deleted
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
   const { toast } = useToast();
@@ -61,22 +66,33 @@ export default function AdminDashboardPage() {
         throw new Error(`Failed to fetch submissions: ${response.statusText}`);
       }
       const data = await response.json();
+      
       if (data && Array.isArray(data) && data.length > 0) {
-        // Dynamically get headers from the first object, excluding a potential 'rowIndex' if added
-        const firstItemKeys = Object.keys(data[0]).filter(key => key !== 'rowIndex');
-        setHeaders(firstItemKeys);
+        // Dynamically get headers from the first object.
+        // Ensure a consistent order of common headers, then add dynamic subject headers.
+        const firstItemKeys = Object.keys(data[0]);
+        const commonHeaders = ["Timestamp", "Roll Number", "Name", "Email ID", "WhatsApp Number"];
+        const subjectHeaders = firstItemKeys.filter(key => !commonHeaders.includes(key) && key !== 'rowIndex');
+        const orderedHeaders = [...commonHeaders, ...subjectHeaders.sort()]; // Sort subject headers alphabetically
+
+        setHeaders(orderedHeaders);
         setSubmissions(data);
       } else if (Array.isArray(data) && data.length === 0) {
         setSubmissions([]);
-        setHeaders([]); // No data, so no headers to display
+        setHeaders([]); 
       } else if (data === null || !Array.isArray(data)) {
         setSubmissions([]);
         setHeaders([]);
         const errorMessage = data === null 
-          ? 'Failed to retrieve data from source. Service might be unavailable.' 
+          ? 'Failed to retrieve data from source. Service might be unavailable or no data.' 
           : 'Received unexpected data format for submissions.';
         setError(errorMessage);
-        toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+        // Toast for no data is not an error, but an info.
+        if (data !== null) {
+             toast({ title: 'Error', description: errorMessage, variant: 'destructive' });
+        } else {
+            toast({ title: 'Info', description: 'No submissions found yet or service unavailable.', variant: 'default'});
+        }
       }
     } catch (err: any) {
       console.error('Error fetching submissions:', err);
@@ -103,7 +119,7 @@ export default function AdminDashboardPage() {
     }
   };
 
-  const escapeCSVField = (field: string | null | undefined): string => {
+  const escapeCSVField = (field: string | number | null | undefined): string => {
     if (field === null || field === undefined) {
       return '';
     }
@@ -165,13 +181,13 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({ rollNumber }),
       });
       const result = await response.json();
-      if (response.ok || response.status === 207) { // 207 for partial success
+      if (response.ok || response.status === 207) { 
         toast({
           title: response.ok ? 'Submission Deleted' : 'Partial Success',
           description: result.message,
-          variant: response.ok ? 'default' : 'default', // or a different variant for partial
+          variant: response.ok ? 'default' : 'default', 
         });
-        fetchData(); // Refresh data
+        fetchData(); 
       } else {
         throw new Error(result.message || 'Failed to delete submission.');
       }
@@ -210,7 +226,7 @@ export default function AdminDashboardPage() {
             <div className="flex justify-between items-center">
               <div>
                 <CardTitle>Candidate Submissions</CardTitle>
-                <CardDescription>List of all candidates who have submitted the faculty selection form.</CardDescription>
+                <CardDescription>List of all candidates who have submitted the faculty selection form (from Firestore).</CardDescription>
               </div>
               <div className="text-right">
                 <p className="text-sm text-muted-foreground">Total Submissions</p>
@@ -241,14 +257,14 @@ export default function AdminDashboardPage() {
                   <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                     <TableRow>
                       {headers.map((header) => (
-                        <TableHead key={header} className="font-semibold whitespace-nowrap">{header.replace(/([A-Z])/g, ' $1').trim()}</TableHead>
+                        <TableHead key={header} className="font-semibold whitespace-nowrap">{header.replace(/([A-Z0-9])/g, ' $1').trim()}</TableHead>
                       ))}
                       <TableHead className="font-semibold whitespace-nowrap text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {submissions.map((submission, index) => (
-                      <TableRow key={index}>
+                      <TableRow key={submission['Roll Number'] as string || index}>
                         {headers.map((header) => (
                           <TableCell key={header} className="whitespace-nowrap">{submission[header]}</TableCell>
                         ))}
@@ -274,15 +290,15 @@ export default function AdminDashboardPage() {
                                 <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                                 <AlertDialogDescription>
                                   This action will permanently delete the submission for roll number 
-                                  <span className="font-semibold"> {submission['Roll Number']} ({submission['Name']})</span>. 
+                                  <span className="font-semibold"> {submission['Roll Number']} ({submission['Name']})</span> from Firestore. 
                                   This will also restore their chosen faculty slots. This student will be able to submit the form again 
-                                  (they might need to clear their browser's local storage).
+                                  (they might need to clear their browser's local storage, though server-side checks are primary).
                                 </AlertDialogDescription>
                               </AlertDialogHeader>
                               <AlertDialogFooter>
                                 <AlertDialogCancel disabled={isDeleting === submission['Roll Number']}>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => handleDeleteSubmission(submission['Roll Number'])}
+                                  onClick={() => handleDeleteSubmission(submission['Roll Number'] as string)}
                                   disabled={isDeleting === submission['Roll Number']}
                                   className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
                                 >
@@ -303,9 +319,8 @@ export default function AdminDashboardPage() {
         </Card>
       </main>
       <footer className="text-center p-4 text-xs text-muted-foreground">
-        Faculty Connect Admin Panel
+        Faculty Connect Admin Panel - Firestore Integrated
       </footer>
     </div>
   );
-
-    
+}
