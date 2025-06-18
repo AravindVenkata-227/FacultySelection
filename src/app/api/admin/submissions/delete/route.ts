@@ -2,7 +2,7 @@
 import { type NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { deleteSheetRowByRollNumber } from '@/services/google-sheets-service';
-import { incrementFacultySlotSync, getFaculties, getSubjects, type Faculty, type Subject } from '@/lib/data';
+import { incrementFacultySlot, getFaculties, getSubjects, type Faculty, type Subject } from '@/lib/data';
 
 export async function POST(request: NextRequest) {
   const cookieStore = cookies();
@@ -30,20 +30,20 @@ export async function POST(request: NextRequest) {
     console.log('[API Delete Submission] Submission deleted from sheet. Restoring faculty slots. Choices extracted:', deleteResult.deletedStudentChoices);
     
     const allFaculties: Faculty[] = await getFaculties();
-    const allSubjects: Subject[] = await getSubjects(); // Fetch all subjects
+    const allSubjects: Subject[] = await getSubjects(); 
     let slotRestorationErrors: string[] = [];
     let slotsSuccessfullyRestoredCount = 0;
 
     for (const [subjectName, facultyName] of Object.entries(deleteResult.deletedStudentChoices)) {
       console.log(`[API Delete Submission] Processing choice - Subject: "${subjectName}", Faculty: "${facultyName}"`);
       
-      const subject = allSubjects.find(s => s.name === subjectName); // Corrected: Search in allSubjects
+      const subject = allSubjects.find(s => s.name === subjectName);
       const faculty = allFaculties.find(f => f.name === facultyName);
 
       if (subject && faculty) {
         console.log(`[API Delete Submission] Found Subject: ${subject.name} (ID: ${subject.id}), Faculty: ${faculty.name} (ID: ${faculty.id})`);
         console.log(`[API Delete Submission] Attempting to restore slot for Subject ID: ${subject.id}, Faculty ID: ${faculty.id}`);
-        const restoreResult = incrementFacultySlotSync(faculty.id, subject.id);
+        const restoreResult = await incrementFacultySlot(faculty.id, subject.id);
         if (!restoreResult.success) {
           const errorMsg = `Failed to restore slot for ${faculty.name} - ${subject.name}: ${restoreResult.error || 'Unknown error'}`;
           console.error(`[API Delete Submission] ${errorMsg}`);

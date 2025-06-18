@@ -109,7 +109,7 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
   return JSON.parse(JSON.stringify(facultySlotsData));
 }
 
-export function updateFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
+export async function updateFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   initializeDataStore(); 
   const key = `${facultyId}_${subjectId}`;
   
@@ -132,7 +132,7 @@ export function updateFacultySlotSync(facultyId: string, subjectId: string): { s
   return { success: false, error: 'No slots available for this faculty in this subject.', currentSlots: 0 };
 }
 
-export function incrementFacultySlotSync(facultyId: string, subjectId: string): { success: boolean; error?: string; currentSlots?: number } {
+export async function incrementFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   initializeDataStore();
   const key = `${facultyId}_${subjectId}`;
 
@@ -146,10 +146,9 @@ export function incrementFacultySlotSync(facultyId: string, subjectId: string): 
 
   const facultyName = faculty.name;
   const subjectName = subject.name;
-  const currentVal = facultySlotsData[key]; // Get value before potential undefined check
+  const currentVal = facultySlotsData[key]; 
 
   if (facultySlotsData[key] === undefined) {
-    // This case should ideally not happen if data is consistent from submissions
     console.warn(`[Increment Slot] Slot key ${key} (${facultyName} - ${subjectName}) was undefined during increment. Initializing to 1 based on assumption of restoration. Max initial was ${faculty.initialSlots}.`);
     facultySlotsData[key] = 1; 
   } else {
