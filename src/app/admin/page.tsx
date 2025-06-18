@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { LogOut, Users, AlertTriangle, Loader2 } from 'lucide-react';
+import { LogOut, Users, AlertTriangle, Loader2, Download, FileSpreadsheet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Submission {
@@ -37,12 +37,22 @@ export default function AdminDashboardPage() {
           throw new Error(`Failed to fetch submissions: ${response.statusText}`);
         }
         const data = await response.json();
-        if (data && data.length > 0) {
+        if (data && Array.isArray(data) && data.length > 0) {
           setHeaders(Object.keys(data[0]));
           setSubmissions(data);
-        } else {
+        } else if (Array.isArray(data) && data.length === 0) {
           setSubmissions([]);
           setHeaders([]);
+        } else if (data === null || !Array.isArray(data)) { // Handle case where data is null (service unavailable) or not an array
+          setSubmissions([]);
+          setHeaders([]);
+          if (data === null) {
+             setError('Failed to retrieve data from source. Service might be unavailable.');
+             toast({ title: 'Error', description: 'Failed to retrieve data from source. Service might be unavailable.', variant: 'destructive'});
+          } else {
+             setError('Received unexpected data format for submissions.');
+             toast({ title: 'Error', description: 'Received unexpected data format for submissions.', variant: 'destructive'});
+          }
         }
       } catch (err: any) {
         console.error('Error fetching submissions:', err);
@@ -60,28 +70,98 @@ export default function AdminDashboardPage() {
       await fetch('/api/admin/logout', { method: 'POST' });
       toast({ title: 'Logged Out', description: 'You have been successfully logged out.' });
       router.push('/admin/login');
-      router.refresh(); 
+      router.refresh();
     } catch (err) {
       console.error('Logout failed:', err);
       toast({ title: 'Logout Failed', description: 'Could not log out. Please try again.', variant: 'destructive'});
     }
   };
 
+  const escapeCSVField = (field: string | null | undefined): string => {
+    if (field === null || field === undefined) {
+      return '';
+    }
+    let stringField = String(field);
+    if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n')) {
+      stringField = stringField.replace(/"/g, '""'); // Escape existing double quotes
+      return `"${stringField}"`; // Enclose in double quotes
+    }
+    return stringField;
+  };
+
+  const handleDownload = () => {
+    if (submissions.length === 0 || headers.length === 0) {
+      toast({
+        title: 'No Data',
+        description: 'There is no data to download.',
+        variant: 'default',
+      });
+      return;
+    }
+
+    const csvContent = [
+      headers.map(escapeCSVField).join(','), // Header row
+      ...submissions.map(submission =>
+        headers.map(header => escapeCSVField(submission[header])).join(',')
+      )
+    ].join('\n');
+
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', 'faculty_submissions.csv');
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      toast({
+        title: 'Download Started',
+        description: 'The submissions CSV file is being downloaded.',
+      });
+    } else {
+       toast({
+        title: 'Download Failed',
+        description: 'Your browser does not support direct file downloads.',
+        variant: 'destructive',
+      });
+    }
+  };
+
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/40">
-      <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-4">
-        <h1 className="text-xl font-semibold text-primary flex items-center">
-          <Users className="mr-2 h-6 w-6" /> Admin Dashboard - Candidate Submissions
-        </h1>
-        <Button onClick={handleLogout} variant="outline" size="sm" className="ml-auto">
-          <LogOut className="mr-2 h-4 w-4" /> Logout
-        </Button>
+      <header className="sticky top-0 z-30 flex h-auto items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6 py-4 flex-wrap">
+        <div className="flex items-center">
+          <FileSpreadsheet className="mr-2 h-6 w-6 text-primary" />
+          <h1 className="text-xl font-semibold text-primary">
+            Admin Dashboard
+          </h1>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Button onClick={handleDownload} variant="outline" size="sm" disabled={isLoading || submissions.length === 0}>
+            <Download className="mr-2 h-4 w-4" /> Download CSV
+          </Button>
+          <Button onClick={handleLogout} variant="outline" size="sm">
+            <LogOut className="mr-2 h-4 w-4" /> Logout
+          </Button>
+        </div>
       </header>
       <main className="flex-1 p-4 sm:px-6 sm:py-0">
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle>Submitted Forms</CardTitle>
-            <CardDescription>List of all candidates who have submitted the faculty selection form.</CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Candidate Submissions</CardTitle>
+                <CardDescription>List of all candidates who have submitted the faculty selection form.</CardDescription>
+              </div>
+              <div className="text-right">
+                <p className="text-sm text-muted-foreground">Total Submissions</p>
+                <p className="text-2xl font-bold text-primary">{isLoading ? <Loader2 className="h-6 w-6 animate-spin" /> : submissions.length}</p>
+              </div>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -101,9 +181,9 @@ export default function AdminDashboardPage() {
                 <p className="text-muted-foreground">No submissions found yet.</p>
               </div>
             ) : (
-              <ScrollArea className="max-h-[calc(100vh-20rem)] w-full overflow-auto">
+              <ScrollArea className="max-h-[calc(100vh-22rem)] w-full overflow-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm">
+                  <TableHeader className="sticky top-0 bg-muted/80 backdrop-blur-sm z-10">
                     <TableRow>
                       {headers.map((header) => (
                         <TableHead key={header} className="font-semibold whitespace-nowrap">{header.replace(/([A-Z])/g, ' $1').trim()}</TableHead>
@@ -131,3 +211,4 @@ export default function AdminDashboardPage() {
     </div>
   );
 }
+
