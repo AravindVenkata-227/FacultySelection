@@ -8,6 +8,8 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 const SESSION_DURATION_HOURS = 24; // Session duration in hours
 
+export const dynamic = 'force-dynamic'; // Ensure the route is treated as dynamic
+
 export async function POST(request: NextRequest) {
   if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
     console.error('[API Admin Login] CRITICAL: Admin credentials (ADMIN_USERNAME, ADMIN_PASSWORD) are not set in environment variables.');
