@@ -1,9 +1,9 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
-// IMPORTANT: This middleware CANNOT use firebase-admin or modules that import it (like functions from src/lib/data.ts that use adminDb).
-// Middleware runs in the Edge runtime, which doesn't support Node.js modules used by firebase-admin.
-// Robust session validation (checking Firestore via Admin SDK) must happen in your API routes or server-side page logic.
+// IMPORTANT: This middleware CANNOT import anything that uses Node.js specific APIs,
+// including firebase-admin or modules that import it (like functions from src/lib/data.ts).
+// Middleware runs in the Edge runtime.
 
 export async function middleware(request: NextRequest) {
   const adminAuthTokenCookie = request.cookies.get('admin-auth-token');
@@ -11,6 +11,8 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Simplified check: only checks for the presence of the session ID in the cookie.
+  // Robust validation of the sessionId (checking Firestore) must happen in your API routes
+  // or server-side page logic (e.g. getServerSideProps), which run in a Node.js environment.
   const isAuthenticatedBasedOnCookiePresence = !!sessionId;
 
   // If trying to access admin routes (excluding /admin/login) without a cookie, redirect to login
@@ -33,8 +35,7 @@ export async function middleware(request: NextRequest) {
   }
   
   // For other /api/admin routes, this middleware only checks for cookie presence.
-  // The actual API route handler MUST validate the sessionId from the cookie
-  // using a Node.js compatible function (e.g., getAdminSession from data.ts using Admin SDK).
+  // The actual API route handler MUST validate the sessionId from the cookie.
   if (pathname.startsWith('/api/admin/') && !isAuthenticatedBasedOnCookiePresence) {
       // console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`);
       return NextResponse.json({ message: 'Authentication required (cookie missing)' }, { status: 401 });

@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { cookies } from 'next/headers';
 import { deleteAdminSession } from '@/lib/data';
 
+export const dynamic = 'force-dynamic'; // Ensure the route is treated as dynamic
+
 export async function POST(request: NextRequest) {
   try {
     const cookieStore = cookies();
