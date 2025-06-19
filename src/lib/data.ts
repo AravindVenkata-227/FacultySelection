@@ -29,7 +29,7 @@ export interface Subject {
   facultyOptions: Faculty['id'][];
 }
 
-console.log("GOOGLE_APPLICATION_CREDENTIALS:", process.env.GOOGLE_APPLICATION_CREDENTIALS);
+// Removed duplicate console.log for GOOGLE_APPLICATION_CREDENTIALS here as it's logged in firebase.ts
 
 // Student Submission data structure for Firestore
 export interface StudentSubmission {
@@ -135,7 +135,6 @@ async function ensureSlotDocument(facultyId: string, subjectId: string): Promise
     }
   } catch (error: any) {
     console.error(`[Data Service] Error ensuring slot document for ${slotKey}. Active Project ID: ${activeProjectId}:`, error);
-    // Fallback to initialSlots might hide underlying issues, so re-throwing.
     throw error;
   }
 }
@@ -151,8 +150,6 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
         try {
           slots[slotKey] = await ensureSlotDocument(faculty.id, subject.id);
         } catch (error) {
-          // Error is already logged in ensureSlotDocument.
-          // We will let the page load with default slots for resilience, but this state indicates a problem.
           console.error(`[Data Service] Failed to fetch/ensure slot for ${slotKey} from Firestore, defaulting to initial in-memory value: ${faculty.initialSlots}. Error was logged above.`);
           slots[slotKey] = faculty.initialSlots; 
         }
@@ -179,6 +176,9 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
         if (!faculty) throw new Error(`Faculty ${facultyId} not found during slot update transaction.`);
         console.warn(`[Data Service Transaction] Slot document ${slotKey} not found. Initializing with ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
         currentSlotValue = faculty.initialSlots;
+        // Ensure the document is created if it doesn't exist before trying to update.
+        // However, set operation below with merge: true or if it's the first operation would create it.
+        // For clarity, we can be explicit if needed, but the current logic handles it.
       } else {
         currentSlotValue = slotDoc.data().slots;
       }
@@ -190,7 +190,7 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
 
       if (currentSlotValue > 0) {
         console.log(`[Data Service Transaction] Decrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue - 1}. Project: ${activeProjectId}`);
-        transaction.set(slotDocRef, { slots: currentSlotValue - 1 }, { merge: !slotDoc.exists() });
+        transaction.set(slotDocRef, { slots: currentSlotValue - 1 }, { merge: !slotDoc.exists() }); // Use merge: true if doc might not exist
         return { success: true, currentSlots: currentSlotValue - 1 };
       } else {
         console.warn(`[Data Service Transaction] No slots available for ${slotKey}. Current value: ${currentSlotValue}. Project: ${activeProjectId}`);
@@ -224,8 +224,8 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
       let currentSlotValue;
 
       if (!slotDoc.exists()) {
-        console.warn(`[Data Service Transaction] Slot document ${slotKey} not found during increment. Assuming 0 current slots. Project: ${activeProjectId}`);
-        currentSlotValue = 0;
+        console.warn(`[Data Service Transaction] Slot document ${slotKey} not found during increment. Initializing to 0 before incrementing. Project: ${activeProjectId}`);
+        currentSlotValue = 0; // If doc doesn't exist, we assume 0 slots were taken. Incrementing makes it 1.
       } else {
         currentSlotValue = slotDoc.data().slots;
       }
@@ -237,11 +237,11 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
 
       if (currentSlotValue < maxSlots) {
         console.log(`[Data Service Transaction] Incrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue + 1}. Project: ${activeProjectId}`);
-        transaction.set(slotDocRef, { slots: currentSlotValue + 1 }, { merge: !slotDoc.exists() });
+        transaction.set(slotDocRef, { slots: currentSlotValue + 1 }, { merge: !slotDoc.exists() }); // Use merge: true if doc might not exist
         return { success: true, currentSlots: currentSlotValue + 1 };
       } else {
         console.log(`[Data Service Transaction] Slot for ${slotKey} already at max (${maxSlots}). No change. Project: ${activeProjectId}`);
-        return { success: true, currentSlots: maxSlots };
+        return { success: true, currentSlots: maxSlots }; // Return success, as it's not an error state.
       }
     });
   } catch (error: any) {
@@ -307,6 +307,8 @@ export async function getStudentSubmissionByRollNumber(rollNumber: string): Prom
     return null;
   } catch (error: any) {
     console.error(`[Data Service] Error fetching student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    // Re-throw or return a more specific error object if needed by callers to distinguish
+    // between "not found" and actual errors. For now, returning null covers both.
     return null; 
   }
 }
@@ -325,7 +327,7 @@ export async function getAllStudentSubmissions(): Promise<StudentSubmission[] | 
     return submissions;
   } catch (error: any) {
     console.error(`[Data Service] Error fetching all student submissions from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
-    return null; 
+    return null; // Or throw error, depending on how critical this is for the caller
   }
 }
 
@@ -334,12 +336,14 @@ export async function deleteStudentSubmission(rollNumber: string): Promise<{succ
   const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
   console.log(`[Data Service] Attempting to delete student submission for roll number '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
   try {
+    // It's good practice to fetch the document first if you need its data before deletion
     const docSnap = await getDoc(submissionDocRef);
     if (!docSnap.exists()) {
       console.warn(`[Data Service] Submission for roll number '${rollNumber}' not found in Firestore. Cannot delete. Project: ${activeProjectId}`);
       return { success: false, error: "Submission not found in Firestore." };
     }
-    const deletedData = { ...docSnap.data(), rollNumber: docSnap.id } as StudentSubmission;
+    const deletedData = { ...docSnap.data(), rollNumber: docSnap.id } as StudentSubmission; // Capture data before deleting
+    
     await deleteDoc(submissionDocRef);
     console.log(`[Data Service] Successfully deleted student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
     return { success: true, deletedData };
@@ -376,21 +380,23 @@ export async function getAdminSession(sessionId: string): Promise<AdminSession |
     const docSnap = await getDoc(sessionDocRef);
     if (docSnap.exists()) {
       const sessionData = docSnap.data();
-      const session = { ...sessionData, sessionId: docSnap.id } as AdminSession;
-      
-      if (session.expiresAt && typeof session.expiresAt.toDate === 'function') {
-        if (session.expiresAt.toDate() < new Date()) {
-          console.log(`[Data Service] Admin session '${sessionId}' found but has expired. Deleting. Project: ${activeProjectId}`);
-          await deleteAdminSession(sessionId); 
-          return null;
-        }
-        console.log(`[Data Service] Admin session '${sessionId}' found and is valid. Project: ${activeProjectId}`);
-        return session;
-      } else {
+      // Basic check for expiresAt field existence and type
+      if (!sessionData.expiresAt || typeof sessionData.expiresAt.toDate !== 'function') {
         console.error(`[Data Service] Admin session '${sessionId}' found but 'expiresAt' field is missing or not a Firestore Timestamp. Project: ${activeProjectId}`, sessionData);
-        await deleteAdminSession(sessionId);
+        // Optionally delete invalid session data
+        await deleteAdminSession(sessionId); // Cleanup invalid session
         return null;
       }
+      
+      const session = { ...sessionData, sessionId: docSnap.id } as AdminSession;
+      
+      if (session.expiresAt.toDate() < new Date()) {
+        console.log(`[Data Service] Admin session '${sessionId}' found but has expired. Deleting. Project: ${activeProjectId}`);
+        await deleteAdminSession(sessionId); // Cleanup expired session
+        return null;
+      }
+      console.log(`[Data Service] Admin session '${sessionId}' found and is valid. Project: ${activeProjectId}`);
+      return session;
     }
     console.log(`[Data Service] No admin session found for Session ID '${sessionId}'. Project: ${activeProjectId}`);
     return null;
@@ -413,5 +419,3 @@ export async function deleteAdminSession(sessionId: string): Promise<{ success: 
     return { success: false, error: error.message || "Failed to delete admin session from Firestore." };
   }
 }
-
-    
