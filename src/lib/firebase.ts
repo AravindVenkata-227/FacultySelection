@@ -19,6 +19,10 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 
+// Log the GOOGLE_APPLICATION_CREDENTIALS environment variable at the module level
+// This will show what path the server is attempting to use for service account credentials
+console.log('[Firebase Init] Value of GOOGLE_APPLICATION_CREDENTIALS environment variable:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
   console.log('[Firebase Init] Firebase App initialized. Project ID from local firebaseConfig:', firebaseConfig.projectId);

@@ -29,6 +29,8 @@ export interface Subject {
   facultyOptions: Faculty['id'][];
 }
 
+console.log("GOOGLE_APPLICATION_CREDENTIALS:", process.env.GOOGLE_APPLICATION_CREDENTIALS);
+
 // Student Submission data structure for Firestore
 export interface StudentSubmission {
   rollNumber: string; // Document ID will be the rollNumber
