@@ -22,7 +22,7 @@ let db: Firestore;
 // Log the GOOGLE_APPLICATION_CREDENTIALS environment variable at the module level
 // This will show what path the server is attempting to use for service account credentials
 console.log('[Firebase Init] Value of GOOGLE_APPLICATION_CREDENTIALS environment variable:', process.env.GOOGLE_APPLICATION_CREDENTIALS);
-// process.cwd() was removed as it's not supported in Edge Runtime where middleware might use this module.
+
 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
@@ -45,3 +45,4 @@ if (!getApps().length) {
 db = getFirestore(app);
 
 export { app, db };
+
