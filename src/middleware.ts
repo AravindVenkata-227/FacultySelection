@@ -1,9 +1,9 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
 
-// IMPORTANT: DO NOT import from '@/lib/data' or any module that uses 'firebase-admin' here.
-// Middleware runs in the Edge runtime and cannot use Node.js specific modules.
-// Actual session validation (e.g., checking Firestore) MUST happen in your API routes or server-side page logic.
+// IMPORTANT: This middleware CANNOT use firebase-admin or modules that import it (like functions from src/lib/data.ts that use adminDb).
+// Middleware runs in the Edge runtime, which doesn't support Node.js modules used by firebase-admin.
+// Robust session validation (checking Firestore via Admin SDK) must happen in your API routes or server-side page logic.
 
 export async function middleware(request: NextRequest) {
   const adminAuthTokenCookie = request.cookies.get('admin-auth-token');
@@ -16,14 +16,14 @@ export async function middleware(request: NextRequest) {
   // If trying to access admin routes (excluding /admin/login) without a cookie, redirect to login
   if (pathname.startsWith('/admin') && pathname !== '/admin/login' && !isAuthenticatedBasedOnCookiePresence) {
     const loginUrl = new URL('/admin/login', request.url);
-    // console.log(`[Middleware] Admin auth cookie not found for ${pathname}, redirecting to login.`); // Optional: for debugging
+    // console.log(`[Middleware] Admin auth cookie not found for ${pathname}, redirecting to login.`);
     return NextResponse.redirect(loginUrl);
   }
 
   // If a cookie exists and user is trying to access /admin/login, redirect to admin dashboard
   if (isAuthenticatedBasedOnCookiePresence && pathname === '/admin/login') {
     const adminUrl = new URL('/admin', request.url);
-    // console.log(`[Middleware] Admin auth cookie found, user on login page, redirecting to /admin.`); // Optional: for debugging
+    // console.log(`[Middleware] Admin auth cookie found, user on login page, redirecting to /admin.`);
     return NextResponse.redirect(adminUrl);
   }
   
@@ -32,10 +32,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Protect other /api/admin routes based on cookie presence.
-  // Actual validation of the sessionId MUST be done inside these API routes using getAdminSession from @/lib/data.
+  // For other /api/admin routes, this middleware only checks for cookie presence.
+  // The actual API route handler MUST validate the sessionId from the cookie
+  // using a Node.js compatible function (e.g., getAdminSession from data.ts using Admin SDK).
   if (pathname.startsWith('/api/admin/') && !isAuthenticatedBasedOnCookiePresence) {
-      // console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`); // Optional: for debugging
+      // console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`);
       return NextResponse.json({ message: 'Authentication required (cookie missing)' }, { status: 401 });
   }
 
