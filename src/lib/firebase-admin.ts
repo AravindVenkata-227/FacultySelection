@@ -18,16 +18,18 @@ if (!admin.apps.length) {
       console.log(`[Firebase Admin Init] Using GOOGLE_APPLICATION_CREDENTIALS, resolved path: ${absoluteGacPath}`);
 
       if (!fs.existsSync(absoluteGacPath)) {
-        console.error(`[Firebase Admin Init] CRITICAL: Service account file NOT FOUND at specified GOOGLE_APPLICATION_CREDENTIALS path: ${absoluteGacPath}. Ensure the file exists in the project root and the .env variable is set correctly (e.g., GOOGLE_APPLICATION_CREDENTIALS="your-service-account-file.json").`);
-        throw new Error(`Service account file not found at ${absoluteGacPath}.`);
+        const errorMessage = `[Firebase Admin Init] CRITICAL: Service account file NOT FOUND at specified GOOGLE_APPLICATION_CREDENTIALS path: ${absoluteGacPath}. Ensure the file exists in the project root and the .env variable is set correctly (e.g., GOOGLE_APPLICATION_CREDENTIALS="your-service-account-file.json").`;
+        console.error(errorMessage);
+        throw new Error(errorMessage);
       }
       
       const serviceAccountString = fs.readFileSync(absoluteGacPath, 'utf8');
       const serviceAccount = JSON.parse(serviceAccountString);
 
       if (!serviceAccount.project_id) {
-        console.error(`[Firebase Admin Init] CRITICAL: project_id not found in the service account JSON file: ${absoluteGacPath}`);
-        throw new Error('project_id missing from service account JSON.');
+        const errorMessage = `[Firebase Admin Init] CRITICAL: project_id not found in the service account JSON file: ${absoluteGacPath}`;
+        console.error(errorMessage);
+        throw new Error(errorMessage);
       }
       console.log(`[Firebase Admin Init] Extracted projectId: ${serviceAccount.project_id} from ${absoluteGacPath}`);
 
@@ -36,9 +38,10 @@ if (!admin.apps.length) {
         projectId: serviceAccount.project_id,
       });
       console.log('[Firebase Admin Init] Firebase Admin App initialized successfully using parsed service account from GOOGLE_APPLICATION_CREDENTIALS file.');
-
     } else {
-      console.warn(`[Firebase Admin Init] ${GAC_ENV_VAR} environment variable is NOT SET. Attempting default initialization (no-args initializeApp), which might only work in certain GCP environments or if other Firebase SDKs are already initialized.`);
+      // Fallback for environments where GAC is not set, but might have implicit credentials
+      // or for environments that handle this differently (e.g. some CI/CD or specific cloud functions)
+      console.log(`[Firebase Admin Init] ${GAC_ENV_VAR} is NOT SET. Attempting default initialization (no-args initializeApp), which might only work in certain GCP environments or if other Firebase SDKs are already initialized.`);
       admin.initializeApp();
       console.log('[Firebase Admin Init] Firebase Admin App initialized using implicit default credentials (e.g., for GCP environments).');
     }
@@ -50,13 +53,15 @@ if (!admin.apps.length) {
     if (currentProjectId) {
       console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
     } else {
-      console.warn('[Firebase Admin Init] Could not automatically determine Admin SDK project ID after initialization, but projectId might have been explicitly set.');
+      console.warn('[Firebase Admin Init] Could not automatically determine Admin SDK project ID after initialization.');
     }
   } catch (error: any) {
     console.error(`[Firebase Admin Init] Firebase Admin App initialization FAILED: ${error.message}`, error.stack ? error.stack : '');
-    const detailMessage = error.message.includes('PEM') 
-        ? "The parsed service account key is invalid. Ensure private_key newlines are correctly escaped (e.g. \\\\n) if using FIREBASE_SERVICE_ACCOUNT_JSON, or that the key itself is not corrupted if using GOOGLE_APPLICATION_CREDENTIALS."
-        : "The 'INTERNAL' error often points to an issue with the SDK's core components or environment setup. Ensure GOOGLE_APPLICATION_CREDENTIALS points to a valid, unaltered service account JSON file (try re-downloading it) in the project root and that there are no conflicts with firebase-admin package versions or dependencies.";
+    const detailMessage = error.message && error.message.includes('INTERNAL')
+        ? "The 'INTERNAL' error often points to an issue with the SDK's core components or environment setup. Ensure GOOGLE_APPLICATION_CREDENTIALS points to a valid, unaltered service account JSON file (try re-downloading it) in the project root and that there are no conflicts with firebase-admin package versions or dependencies."
+        : error.message && (error.message.includes('PEM') || error.message.includes('private key'))
+        ? "The parsed service account key is invalid. Ensure private_key newlines are correctly escaped if using FIREBASE_SERVICE_ACCOUNT_JSON, or that the key file itself is not corrupted if using GOOGLE_APPLICATION_CREDENTIALS."
+        : "An unexpected error occurred during Firebase Admin SDK initialization.";
     console.error(`[Firebase Admin Init] Detail: ${detailMessage}`);
   }
 } else {
