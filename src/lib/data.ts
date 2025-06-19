@@ -1,21 +1,7 @@
 
-import { db } from './firebase';
-import {
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  deleteDoc,
-  getDocs,
-  writeBatch,
-  Timestamp,
-  runTransaction,
-  serverTimestamp,
-  query,
-  where,
-  orderBy,
-  limit
-} from 'firebase/firestore';
+import { adminDb, admin } from './firebase-admin'; // Use Firebase Admin SDK
+import type { Timestamp } from 'firebase-admin/firestore'; // Admin SDK Timestamp
+const { FieldValue } = admin.firestore; // Admin SDK FieldValue for serverTimestamp
 
 export interface Faculty {
   id: string;
@@ -29,22 +15,22 @@ export interface Subject {
   facultyOptions: Faculty['id'][];
 }
 
-// Student Submission data structure for Firestore
+// Student Submission data structure for Firestore (using Admin SDK types)
 export interface StudentSubmission {
-  rollNumber: string; // Document ID will be the rollNumber
+  rollNumber: string;
   name: string;
   email: string;
   whatsappNumber: string;
-  timestamp: Timestamp; // Firestore Timestamp
+  timestamp: Timestamp; // Firebase Admin Timestamp
   selections: Record<string, string>; // subjectId -> facultyId
 }
 
-// Admin Session data structure for Firestore
+// Admin Session data structure for Firestore (using Admin SDK types)
 export interface AdminSession {
-  sessionId: string; // Document ID will be the sessionId
-  userId: string; // e.g., 'admin_user'
-  createdAt: Timestamp; // Firestore Timestamp for creation
-  expiresAt: Timestamp; // Firestore Timestamp for expiry
+  sessionId: string;
+  userId: string;
+  createdAt: Timestamp; // Firebase Admin Timestamp
+  expiresAt: Timestamp; // Firebase Admin Timestamp
 }
 
 
@@ -73,15 +59,16 @@ const _subjects: Subject[] = [
   { id: 's1', name: 'Artificial Intelligence (AI)', facultyOptions: ['f1', 'f2', 'f3'] },
   { id: 's2', name: 'Cyber Security (CS)', facultyOptions: ['f4', 'f5', 'f6'] },
   { id: 's3', name: 'Linux System Administration (LSA)', facultyOptions: ['f7', 'f8', 'f9'] },
-  { id: 's4', name: 'Object Oriented Analysis & Design (OOAD)', facultyOptions: ['f10', 'f11', 'f12'] },
-  { id: 's5', name: 'Management Sciences (MS)', facultyOptions: ['f13', 'f14', 'f15'] },
-  { id: 's6', name: 'Block Chain Technologies (BCT)', facultyOptions: ['f16', 'f17', 'f18'] },
+  { id:s4', name: 'Object Oriented Analysis & Design (OOAD)', facultyOptions: ['f10', 'f11', 'f12'] },
+  { id:s5', name: 'Management Sciences (MS)', facultyOptions: ['f13', 'f14', 'f15'] },
+  { id:s6', name: 'Block Chain Technologies (BCT)', facultyOptions: ['f16', 'f17', 'f18'] },
 ];
 
 const FACULTY_SLOTS_COLLECTION = 'facultySubjectSlots';
 const STUDENT_SUBMISSIONS_COLLECTION = 'studentSubmissions';
 const ADMIN_SESSIONS_COLLECTION = 'adminSessions';
 
+// These functions deal with in-memory data, no change needed for Admin SDK
 export async function getFaculties(): Promise<Faculty[]> {
   return JSON.parse(JSON.stringify(_faculties));
 }
@@ -103,36 +90,34 @@ async function ensureSlotDocument(facultyId: string, subjectId: string): Promise
   const subject = _subjects.find(s => s.id === subjectId);
 
   if (!faculty || !subject || !subject.facultyOptions.includes(facultyId)) {
-    const errorMsg = `[Data Service] Invalid faculty (${facultyId}) or subject (${subjectId}) combination for slot initialization.`;
+    const errorMsg = `[Data Service Admin] Invalid faculty (${facultyId}) or subject (${subjectId}) combination for slot initialization.`;
     console.error(errorMsg);
     throw new Error(errorMsg);
   }
 
   const slotKey = `${facultyId}_${subjectId}`;
-  const slotDocRef = doc(db, FACULTY_SLOTS_COLLECTION, slotKey);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
 
   try {
-    console.log(`[Data Service] Attempting getDoc for ${FACULTY_SLOTS_COLLECTION}/${slotKey}. Project ID from db.app.options: ${activeProjectId}`);
-    const docSnap = await getDoc(slotDocRef);
-    if (docSnap.exists()) {
+    console.log(`[Data Service Admin] Attempting getDoc for ${FACULTY_SLOTS_COLLECTION}/${slotKey}. Project ID from Admin SDK: ${activeProjectId}`);
+    const docSnap = await slotDocRef.get();
+    if (docSnap.exists) {
       const data = docSnap.data();
-      if (typeof data.slots === 'number') {
+      if (data && typeof data.slots === 'number') {
         return data.slots;
       } else {
-        console.warn(`[Data Service] Slot data for ${slotKey} is not a number (${typeof data.slots}), re-initializing with ${faculty.initialSlots}. Project: ${activeProjectId}`);
-        console.log(`[Data Service] Attempting setDoc (re-init) for ${FACULTY_SLOTS_COLLECTION}/${slotKey}. Project ID from db.app.options: ${activeProjectId}`);
-        await setDoc(slotDocRef, { slots: faculty.initialSlots });
+        console.warn(`[Data Service Admin] Slot data for ${slotKey} is not a number or missing (${data ? typeof data.slots : 'undefined'}), re-initializing with ${faculty.initialSlots}. Project: ${activeProjectId}`);
+        await slotDocRef.set({ slots: faculty.initialSlots });
         return faculty.initialSlots;
       }
     } else {
-      console.log(`[Data Service] Slot document for ${slotKey} not found, creating with initial slots: ${faculty.initialSlots}. Project: ${activeProjectId}`);
-      console.log(`[Data Service] Attempting setDoc (create) for ${FACULTY_SLOTS_COLLECTION}/${slotKey}. Project ID from db.app.options: ${activeProjectId}`);
-      await setDoc(slotDocRef, { slots: faculty.initialSlots });
+      console.log(`[Data Service Admin] Slot document for ${slotKey} not found, creating with initial slots: ${faculty.initialSlots}. Project: ${activeProjectId}`);
+      await slotDocRef.set({ slots: faculty.initialSlots });
       return faculty.initialSlots;
     }
   } catch (error: any) {
-    console.error(`[Data Service] Error ensuring slot document for ${slotKey}. Active Project ID: ${activeProjectId}:`, error);
+    console.error(`[Data Service Admin] Error ensuring slot document for ${slotKey}. Active Project ID: ${activeProjectId}:`, error);
     throw error;
   }
 }
@@ -148,8 +133,8 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
         try {
           slots[slotKey] = await ensureSlotDocument(faculty.id, subject.id);
         } catch (error) {
-          console.error(`[Data Service] Failed to fetch/ensure slot for ${slotKey} from Firestore, defaulting to initial in-memory value: ${faculty.initialSlots}. Error was logged above.`);
-          slots[slotKey] = faculty.initialSlots;
+          console.error(`[Data Service Admin] Failed to fetch/ensure slot for ${slotKey} from Firestore, defaulting to initial in-memory value: ${faculty.initialSlots}. Error was logged above.`);
+          slots[slotKey] = faculty.initialSlots; // Fallback, though ensureSlotDocument should throw
         }
       }
     }
@@ -159,259 +144,268 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
 
 export async function updateFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   const slotKey = `${facultyId}_${subjectId}`;
-  const slotDocRef = doc(db, FACULTY_SLOTS_COLLECTION, slotKey);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service Transaction] Initiating updateFacultySlot for ${slotKey}. Active Project ID: ${activeProjectId}`);
+  const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin Transaction] Initiating updateFacultySlot for ${slotKey}. Active Project ID: ${activeProjectId}`);
 
   try {
-    return await runTransaction(db, async (transaction) => {
-      console.log(`[Data Service Transaction] Getting slot document ${slotKey} inside transaction. Project: ${activeProjectId}`);
+    return await adminDb.runTransaction(async (transaction) => {
+      console.log(`[Data Service Admin Transaction] Getting slot document ${slotKey} inside transaction. Project: ${activeProjectId}`);
       const slotDoc = await transaction.get(slotDocRef);
       let currentSlotValue;
 
-      if (!slotDoc.exists()) {
+      if (!slotDoc.exists) {
         const faculty = _faculties.find(f => f.id === facultyId);
         if (!faculty) throw new Error(`Faculty ${facultyId} not found during slot update transaction.`);
-        console.warn(`[Data Service Transaction] Slot document ${slotKey} not found. Initializing with ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
+        console.warn(`[Data Service Admin Transaction] Slot document ${slotKey} not found. Initializing with ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
         currentSlotValue = faculty.initialSlots;
+        // Ensure the document exists for the transaction to update, or set it if creating
+        transaction.set(slotDocRef, { slots: faculty.initialSlots }); 
       } else {
-        currentSlotValue = slotDoc.data().slots;
-      }
-
-      if (typeof currentSlotValue !== 'number') {
-          console.error(`[Data Service Transaction] Slot value for ${slotKey} is not a number: ${currentSlotValue}. Project: ${activeProjectId}`);
-          throw new Error(`Slot value for ${slotKey} is not a number.`);
+        const data = slotDoc.data();
+        if (!data || typeof data.slots !== 'number') {
+            console.error(`[Data Service Admin Transaction] Slot value for ${slotKey} is not a number or data is missing. Data: ${JSON.stringify(data)}. Project: ${activeProjectId}`);
+            throw new Error(`Slot value for ${slotKey} is not a number or data is missing.`);
+        }
+        currentSlotValue = data.slots;
       }
 
       if (currentSlotValue > 0) {
-        console.log(`[Data Service Transaction] Decrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue - 1}. Project: ${activeProjectId}`);
-        transaction.set(slotDocRef, { slots: currentSlotValue - 1 }, { merge: !slotDoc.exists() });
+        console.log(`[Data Service Admin Transaction] Decrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue - 1}. Project: ${activeProjectId}`);
+        transaction.update(slotDocRef, { slots: currentSlotValue - 1 });
         return { success: true, currentSlots: currentSlotValue - 1 };
       } else {
-        console.warn(`[Data Service Transaction] No slots available for ${slotKey}. Current value: ${currentSlotValue}. Project: ${activeProjectId}`);
+        console.warn(`[Data Service Admin Transaction] No slots available for ${slotKey}. Current value: ${currentSlotValue}. Project: ${activeProjectId}`);
         return { success: false, error: 'No slots available for this faculty in this subject.', currentSlots: 0 };
       }
     });
   } catch (error: any) {
-    console.error(`[Data Service Transaction] Error updating faculty slot ${slotKey}. Active Project ID: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin Transaction] Error updating faculty slot ${slotKey}. Active Project ID: ${activeProjectId}:`, error.message, error.stack);
     return { success: false, error: error.message || 'Failed to update slot due to a transaction error.' };
   }
 }
 
 export async function incrementFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   const slotKey = `${facultyId}_${subjectId}`;
-  const slotDocRef = doc(db, FACULTY_SLOTS_COLLECTION, slotKey);
+  const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
   const faculty = _faculties.find(f => f.id === facultyId);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service Transaction] Initiating incrementFacultySlot for ${slotKey}. Active Project ID: ${activeProjectId}`);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin Transaction] Initiating incrementFacultySlot for ${slotKey}. Active Project ID: ${activeProjectId}`);
 
   if (!faculty) {
-    const errorMsg = `[Data Service Transaction] Faculty ${facultyId} not found during increment. Project: ${activeProjectId}`;
+    const errorMsg = `[Data Service Admin Transaction] Faculty ${facultyId} not found during increment. Project: ${activeProjectId}`;
     console.error(errorMsg);
     return { success: false, error: `Faculty ${facultyId} not found.` };
   }
   const maxSlots = faculty.initialSlots;
 
   try {
-    return await runTransaction(db, async (transaction) => {
-      console.log(`[Data Service Transaction] Getting slot document ${slotKey} inside increment transaction. Project: ${activeProjectId}`);
+    return await adminDb.runTransaction(async (transaction) => {
+      console.log(`[Data Service Admin Transaction] Getting slot document ${slotKey} inside increment transaction. Project: ${activeProjectId}`);
       const slotDoc = await transaction.get(slotDocRef);
       let currentSlotValue;
 
-      if (!slotDoc.exists()) {
-        console.warn(`[Data Service Transaction] Slot document ${slotKey} not found during increment. Initializing to 0 before incrementing. Project: ${activeProjectId}`);
+      if (!slotDoc.exists) {
+        console.warn(`[Data Service Admin Transaction] Slot document ${slotKey} not found during increment. Initializing to 0 before incrementing (will be set to 1). Project: ${activeProjectId}`);
         currentSlotValue = 0;
+         transaction.set(slotDocRef, { slots: 1 }); // Initialize and increment
+         return { success: true, currentSlots: 1 };
       } else {
-        currentSlotValue = slotDoc.data().slots;
-      }
-
-      if (typeof currentSlotValue !== 'number') {
-          console.error(`[Data Service Transaction] Slot value for ${slotKey} is not a number during increment: ${currentSlotValue}. Project: ${activeProjectId}`);
-          throw new Error(`Slot value for ${slotKey} is not a number during increment.`);
+        const data = slotDoc.data();
+        if (!data || typeof data.slots !== 'number') {
+            console.error(`[Data Service Admin Transaction] Slot value for ${slotKey} is not a number during increment or data missing. Data: ${JSON.stringify(data)}. Project: ${activeProjectId}`);
+            throw new Error(`Slot value for ${slotKey} is not a number during increment or data missing.`);
+        }
+        currentSlotValue = data.slots;
       }
 
       if (currentSlotValue < maxSlots) {
-        console.log(`[Data Service Transaction] Incrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue + 1}. Project: ${activeProjectId}`);
-        transaction.set(slotDocRef, { slots: currentSlotValue + 1 }, { merge: !slotDoc.exists() });
+        console.log(`[Data Service Admin Transaction] Incrementing slot for ${slotKey} from ${currentSlotValue} to ${currentSlotValue + 1}. Project: ${activeProjectId}`);
+        transaction.update(slotDocRef, { slots: currentSlotValue + 1 });
         return { success: true, currentSlots: currentSlotValue + 1 };
       } else {
-        console.log(`[Data Service Transaction] Slot for ${slotKey} already at max (${maxSlots}). No change. Project: ${activeProjectId}`);
-        return { success: true, currentSlots: maxSlots };
+        console.log(`[Data Service Admin Transaction] Slot for ${slotKey} already at max (${maxSlots}). No change. Project: ${activeProjectId}`);
+        return { success: true, currentSlots: maxSlots }; // No change, but operation is "successful" in not erroring
       }
     });
   } catch (error: any) {
-    console.error(`[Data Service Transaction] Error incrementing faculty slot ${slotKey}. Active Project ID: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin Transaction] Error incrementing faculty slot ${slotKey}. Active Project ID: ${activeProjectId}:`, error.message, error.stack);
     return { success: false, error: error.message || 'Failed to increment slot due to a transaction error.' };
   }
 }
 
 export async function resetAllFacultySlots(): Promise<void> {
-  const batch = writeBatch(db);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Starting reset of all faculty slots in Firestore. Active Project ID: ${activeProjectId}`);
+  const batch = adminDb.batch();
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Starting reset of all faculty slots in Firestore. Active Project ID: ${activeProjectId}`);
   _subjects.forEach(subject => {
     subject.facultyOptions.forEach(facultyId => {
       const faculty = _faculties.find(f => f.id === facultyId);
       if (faculty) {
         const slotKey = `${faculty.id}_${subject.id}`;
-        const slotDocRef = doc(db, FACULTY_SLOTS_COLLECTION, slotKey);
+        const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
         batch.set(slotDocRef, { slots: faculty.initialSlots });
-        console.log(`[Data Service] Queued reset for ${slotKey} to ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
+        console.log(`[Data Service Admin] Queued reset for ${slotKey} to ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
       }
     });
   });
   try {
     await batch.commit();
-    console.log(`[Data Service] All faculty slots have been successfully reset in Firestore. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] All faculty slots have been successfully reset in Firestore. Project: ${activeProjectId}`);
   } catch (error) {
-    console.error(`[Data Service] Error resetting faculty slots in Firestore. Project: ${activeProjectId}:`, error);
+    console.error(`[Data Service Admin] Error resetting faculty slots in Firestore. Project: ${activeProjectId}:`, error);
     throw error;
   }
 }
 
-// --- Student Submission Functions (Firestore) ---
+// --- Student Submission Functions (Firestore Admin SDK) ---
 
 export async function addStudentSubmission(submissionData: Omit<StudentSubmission, 'timestamp' | 'rollNumber'> & { rollNumber: string }): Promise<{success: boolean, error?: string}> {
-  const submissionDocRef = doc(db, STUDENT_SUBMISSIONS_COLLECTION, submissionData.rollNumber);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Attempting to add student submission to Firestore. Collection: '${STUDENT_SUBMISSIONS_COLLECTION}', Roll Number (Doc ID): '${submissionData.rollNumber}'. Project: ${activeProjectId}`);
+  const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(submissionData.rollNumber);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Attempting to add student submission to Firestore. Collection: '${STUDENT_SUBMISSIONS_COLLECTION}', Roll Number (Doc ID): '${submissionData.rollNumber}'. Project: ${activeProjectId}`);
   try {
-    await setDoc(submissionDocRef, {
+    await submissionDocRef.set({
       ...submissionData,
-      timestamp: serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(), // Use Admin SDK's serverTimestamp
     });
-    console.log(`[Data Service] Student submission for '${submissionData.rollNumber}' added successfully to Firestore. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] Student submission for '${submissionData.rollNumber}' added successfully to Firestore. Project: ${activeProjectId}`);
     return { success: true };
   } catch (error: any) {
-    console.error(`[Data Service] Error adding student submission for '${submissionData.rollNumber}' to Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin] Error adding student submission for '${submissionData.rollNumber}' to Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
     return { success: false, error: error.message || "Failed to save submission to Firestore." };
   }
 }
 
 export async function getStudentSubmissionByRollNumber(rollNumber: string): Promise<StudentSubmission | null> {
-  const submissionDocRef = doc(db, STUDENT_SUBMISSIONS_COLLECTION, rollNumber);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Fetching student submission for roll number '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
+  const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(rollNumber);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Fetching student submission for roll number '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
   try {
-    const docSnap = await getDoc(submissionDocRef);
-    if (docSnap.exists()) {
-      console.log(`[Data Service] Submission found for '${rollNumber}'. Project: ${activeProjectId}`);
-      return { ...docSnap.data(), rollNumber: docSnap.id } as StudentSubmission;
+    const docSnap = await submissionDocRef.get();
+    if (docSnap.exists) {
+      const data = docSnap.data();
+      if (!data) return null; // Should not happen if exists is true
+      console.log(`[Data Service Admin] Submission found for '${rollNumber}'. Project: ${activeProjectId}`);
+      return { ...data, rollNumber: docSnap.id } as StudentSubmission;
     }
-    console.log(`[Data Service] No submission found for '${rollNumber}'. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] No submission found for '${rollNumber}'. Project: ${activeProjectId}`);
     return null;
   } catch (error: any) {
-    console.error(`[Data Service] Error fetching student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
-    return null;
+    console.error(`[Data Service Admin] Error fetching student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    return null; 
   }
 }
 
 export async function getAllStudentSubmissions(): Promise<StudentSubmission[] | null> {
   const submissions: StudentSubmission[] = [];
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Fetching all student submissions from Firestore, ordered by timestamp descending. Project: ${activeProjectId}`);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Fetching all student submissions from Firestore, ordered by timestamp descending. Project: ${activeProjectId}`);
   try {
-    const q = query(collection(db, STUDENT_SUBMISSIONS_COLLECTION), orderBy("timestamp", "desc"));
-    const querySnapshot = await getDocs(q);
+    const querySnapshot = await adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).orderBy("timestamp", "desc").get();
     querySnapshot.forEach((docSnap) => {
-      submissions.push({ ...docSnap.data(), rollNumber: docSnap.id } as StudentSubmission);
+      const data = docSnap.data();
+      if (data) {
+        submissions.push({ ...data, rollNumber: docSnap.id } as StudentSubmission);
+      }
     });
-    console.log(`[Data Service] Fetched ${submissions.length} student submissions. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] Fetched ${submissions.length} student submissions. Project: ${activeProjectId}`);
     return submissions;
   } catch (error: any) {
-    console.error(`[Data Service] Error fetching all student submissions from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin] Error fetching all student submissions from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
     return null;
   }
 }
 
 export async function deleteStudentSubmission(rollNumber: string): Promise<{success: boolean, error?: string, deletedData?: StudentSubmission}> {
-  const submissionDocRef = doc(db, STUDENT_SUBMISSIONS_COLLECTION, rollNumber);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Attempting to delete student submission for roll number '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
+  const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(rollNumber);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Attempting to delete student submission for roll number '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
   try {
-    const docSnap = await getDoc(submissionDocRef);
-    if (!docSnap.exists()) {
-      console.warn(`[Data Service] Submission for roll number '${rollNumber}' not found in Firestore. Cannot delete. Project: ${activeProjectId}`);
+    const docSnap = await submissionDocRef.get();
+    if (!docSnap.exists) {
+      console.warn(`[Data Service Admin] Submission for roll number '${rollNumber}' not found in Firestore. Cannot delete. Project: ${activeProjectId}`);
       return { success: false, error: "Submission not found in Firestore." };
     }
-    const deletedData = { ...docSnap.data(), rollNumber: docSnap.id } as StudentSubmission;
+    const data = docSnap.data();
+    if (!data) return { success: false, error: "Submission data not found though document exists." };
 
-    await deleteDoc(submissionDocRef);
-    console.log(`[Data Service] Successfully deleted student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
+    const deletedData = { ...data, rollNumber: docSnap.id } as StudentSubmission;
+    await submissionDocRef.delete();
+    console.log(`[Data Service Admin] Successfully deleted student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}`);
     return { success: true, deletedData };
   } catch (error: any) {
-    console.error(`[Data Service] Error deleting student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin] Error deleting student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
     return { success: false, error: error.message || "Failed to delete submission from Firestore." };
   }
 }
 
-// --- Admin Session Functions (Firestore) ---
-export async function createAdminSession(sessionId: string, userId: string, expiresAt: Date): Promise<{ success: boolean; error?: string }> {
-  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID'; // Get active project ID
-  console.log(`[Data Service] Attempting to create admin session in Firestore. Collection: '${ADMIN_SESSIONS_COLLECTION}', Session ID: '${sessionId}', User ID: '${userId}', Expires At: '${expiresAt.toISOString()}'. Project: ${activeProjectId}`);
+// --- Admin Session Functions (Firestore Admin SDK) ---
+export async function createAdminSession(sessionId: string, userId: string, expiresAtDate: Date): Promise<{ success: boolean; error?: string }> {
+  const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Attempting to create admin session in Firestore. Collection: '${ADMIN_SESSIONS_COLLECTION}', Session ID: '${sessionId}', User ID: '${userId}', Expires At: '${expiresAtDate.toISOString()}'. Project: ${activeProjectId}`);
   try {
-    await setDoc(sessionDocRef, {
+    await sessionDocRef.set({
       userId: userId,
-      createdAt: serverTimestamp(),
-      expiresAt: Timestamp.fromDate(expiresAt),
+      createdAt: FieldValue.serverTimestamp(), // Use Admin SDK's serverTimestamp
+      expiresAt: admin.firestore.Timestamp.fromDate(expiresAtDate), // Convert JS Date to Admin Timestamp
     });
-    console.log(`[Data Service] Admin session created successfully in Firestore for Session ID: '${sessionId}'. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] Admin session created successfully in Firestore for Session ID: '${sessionId}'. Project: ${activeProjectId}`);
     return { success: true };
   } catch (error: any) {
-    console.error(`[Data Service] Error creating admin session '${sessionId}' in Firestore. Project: ${activeProjectId}:`, error.message, error.stack ? error.stack : error);
+    console.error(`[Data Service Admin] Error creating admin session '${sessionId}' in Firestore. Project: ${activeProjectId}:`, error.message, error.stack ? error.stack : error);
     return { success: false, error: error.message || "Failed to create admin session in Firestore." };
   }
 }
 
 export async function getAdminSession(sessionId: string): Promise<AdminSession | null> {
-  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Fetching admin session for Session ID '${sessionId}' from Firestore. Project: ${activeProjectId}`);
+  const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Fetching admin session for Session ID '${sessionId}' from Firestore. Project: ${activeProjectId}`);
   try {
-    const docSnap = await getDoc(sessionDocRef);
-    if (docSnap.exists()) {
+    const docSnap = await sessionDocRef.get();
+    if (docSnap.exists) {
       const sessionData = docSnap.data();
-      if (!sessionData.expiresAt || typeof sessionData.expiresAt.toDate !== 'function') {
-        console.error(`[Data Service] Admin session '${sessionId}' found but 'expiresAt' field is missing or not a Firestore Timestamp. Project: ${activeProjectId}`, sessionData);
-        await deleteAdminSession(sessionId);
+      if (!sessionData) return null;
+
+      // Ensure expiresAt is a Firestore Timestamp (Admin SDK specific)
+      if (!sessionData.expiresAt || !(sessionData.expiresAt instanceof admin.firestore.Timestamp)) {
+        console.error(`[Data Service Admin] Admin session '${sessionId}' found but 'expiresAt' field is missing or not a Firestore Timestamp. Data:`, sessionData, `Project: ${activeProjectId}`);
+        await deleteAdminSession(sessionId); // Clean up potentially corrupt session
         return null;
       }
-
+      
       const session = { ...sessionData, sessionId: docSnap.id } as AdminSession;
 
       if (session.expiresAt.toDate() < new Date()) {
-        console.log(`[Data Service] Admin session '${sessionId}' found but has expired. Deleting. Project: ${activeProjectId}`);
+        console.log(`[Data Service Admin] Admin session '${sessionId}' found but has expired. Deleting. Project: ${activeProjectId}`);
         await deleteAdminSession(sessionId);
         return null;
       }
-      console.log(`[Data Service] Admin session '${sessionId}' found and is valid. Project: ${activeProjectId}`);
+      console.log(`[Data Service Admin] Admin session '${sessionId}' found and is valid. Project: ${activeProjectId}`);
       return session;
     }
-    console.log(`[Data Service] No admin session found for Session ID '${sessionId}'. Project: ${activeProjectId}`);
+    console.log(`[Data Service Admin] No admin session found for Session ID '${sessionId}'. Project: ${activeProjectId}`);
     return null;
   } catch (error: any) {
-    console.error(`[Data Service] Error fetching admin session '${sessionId}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
-    return null;
+    console.error(`[Data Service Admin] Error fetching admin session '${sessionId}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    return null; // Return null on error to prevent middleware/route hangs
   }
 }
 
 export async function deleteAdminSession(sessionId: string): Promise<{ success: boolean; error?: string }> {
-  const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Attempting to delete admin session for Session ID '${sessionId}' from Firestore. Project: ${activeProjectId}`);
+  const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
+  const activeProjectId = admin.instanceId().app.options.projectId || 'UNKNOWN_PROJECT_ID';
+  console.log(`[Data Service Admin] Attempting to delete admin session for Session ID '${sessionId}' from Firestore. Project: ${activeProjectId}`);
   try {
-    await deleteDoc(sessionDocRef);
-    console.log(`[Data Service] Successfully deleted admin session for '${sessionId}' from Firestore. Project: ${activeProjectId}`);
+    await sessionDocRef.delete();
+    console.log(`[Data Service Admin] Successfully deleted admin session for '${sessionId}' from Firestore. Project: ${activeProjectId}`);
     return { success: true };
   } catch (error: any) {
-    console.error(`[Data Service] Error deleting admin session '${sessionId}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
+    console.error(`[Data Service Admin] Error deleting admin session '${sessionId}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
     return { success: false, error: error.message || "Failed to delete admin session from Firestore." };
   }
 }
 
-// Ensure this file exports something to be a module, even if it's just an empty object or a type.
-// This is often necessary if all exports are conditional or might be tree-shaken away otherwise.
 export type { StudentInfo, FacultySelectionEntry, FacultyConnectFormValues, SubmissionPayload } from '../lib/schema';
-
-    
