@@ -25,9 +25,8 @@ export async function POST(request: NextRequest) {
       const sessionResult = await createAdminSession(sessionId, 'admin_user', expiresAt);
 
       if (!sessionResult.success) {
-        // Detailed error should have been logged by createAdminSession
         console.error(`[API Admin Login] Failed to create admin session in Firestore. Session ID attempt: '${sessionId}'. Error from data service: ${sessionResult.error}`);
-        return NextResponse.json({ message: 'Login failed due to a server error (session creation). Refer to server logs for details.' }, { status: 500 });
+        return NextResponse.json({ message: `Login failed due to a server error (session creation). Refer to server logs for details. Details: ${sessionResult.error}` }, { status: 500 });
       }
 
       const cookieStore = cookies();
