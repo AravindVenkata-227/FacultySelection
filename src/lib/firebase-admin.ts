@@ -42,33 +42,15 @@ if (!admin.apps.length) {
     }
 
     if (serviceAccount && serviceAccount.project_id && serviceAccount.private_key) {
+      // The private_key from JSON.parse should already have \n converted to actual newlines.
+      // Log the key as the SDK will see it.
+      // WARNING: LOGGING THE FULL PRIVATE KEY IS A SECURITY RISK. REMOVE THIS LOG AFTER DEBUGGING.
+      console.log('[Firebase Admin Init] !!! SECURITY WARNING !!! Full private_key being passed to SDK (REMOVE THIS LOG AFTER DEBUGGING):\n', serviceAccount.private_key);
+      // END WARNING
+
       try {
-        console.log('[Firebase Admin Init] Private key snippet from parsed JSON (first 70 chars):', serviceAccount.private_key.substring(0, 70));
-
-        // Defensive cleaning of the private key
-        let cleanedPrivateKey = serviceAccount.private_key
-          .replace(/\r\n/g, '\n') // Ensure Unix newlines
-          .trim(); // Remove leading/trailing whitespace from the whole key
-
-        // Ensure the key content (between markers) does not have leading/trailing spaces on its lines,
-        // and that markers are on their own lines.
-        const keyParts = cleanedPrivateKey.split('\n');
-        const processedKeyParts = keyParts.map(part => part.trim()); // Trim each line
-        cleanedPrivateKey = processedKeyParts.join('\n');
-        
-        if (!cleanedPrivateKey.endsWith('\n')) {
-          cleanedPrivateKey += '\n'; // Ensure final newline
-        }
-        
-        // Update the service account object with the cleaned key
-        const finalServiceAccount = {
-            ...serviceAccount,
-            private_key: cleanedPrivateKey,
-        };
-        console.log('[Firebase Admin Init] Private key snippet after cleaning (first 70 chars):', finalServiceAccount.private_key.substring(0, 70));
-        
         admin.initializeApp({
-          credential: admin.credential.cert(finalServiceAccount),
+          credential: admin.credential.cert(serviceAccount),
         });
         
         console.log('[Firebase Admin Init] Firebase Admin App initialized successfully using parsed JSON.');
@@ -76,7 +58,7 @@ if (!admin.apps.length) {
         adminAuth = admin.auth();
         FieldValue = admin.firestore.FieldValue;
 
-        const currentProjectId = admin.instanceId()?.app?.options?.projectId || finalServiceAccount.project_id;
+        const currentProjectId = admin.instanceId()?.app?.options?.projectId || serviceAccount.project_id;
         if (currentProjectId) {
             console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
         } else {
@@ -84,7 +66,7 @@ if (!admin.apps.length) {
         }
 
       } catch (initError: any) {
-        console.error('[Firebase Admin Init] Firebase Admin App initialization error from JSON string:', initError.message, initError.stack ? initError.stack.split('\n')[0] : '');
+        console.error('[Firebase Admin Init] Firebase Admin App initialization error from JSON string:', initError.message, initError.stack ? initError.stack.split('\\n')[0] : '');
         if (initError.message && (initError.message.includes('Invalid service account') || initError.message.includes('Failed to parse private key') || initError.message.includes('Error parsing service account key'))) {
             console.error('[Firebase Admin Init] Detail: The parsed service account key is invalid. Ensure private_key newlines are correctly escaped (e.g. \\\\n) if the JSON is on a single line in .env, or that the key itself is not corrupted.');
         }
@@ -122,3 +104,5 @@ if (admin.apps.length > 0 && admin.apps[0] && (!adminDb || !adminAuth || !FieldV
 }
 
 export { adminDb, adminAuth, admin, FieldValue };
+
+    
