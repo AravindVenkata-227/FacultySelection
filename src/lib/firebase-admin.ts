@@ -33,10 +33,6 @@ if (!admin.apps.length) {
       if (serviceAccount && (!serviceAccount.private_key || typeof serviceAccount.private_key !== 'string')) {
         console.error('[Firebase Admin Init] ERROR: private_key is missing or not a string in the parsed service account JSON.');
         serviceAccount = null; 
-      } else if (serviceAccount) {
-        // Log a snippet of the private key as it is after JSON.parse
-        // This key *should* have literal \n characters if the .env was \\n
-        console.log('[Firebase Admin Init] Private key snippet from parsed object (first 70 chars):', serviceAccount.private_key.substring(0, 70));
       }
 
     } catch (parseError: any) {
@@ -47,10 +43,32 @@ if (!admin.apps.length) {
 
     if (serviceAccount && serviceAccount.project_id && serviceAccount.private_key) {
       try {
-        // The serviceAccount.private_key at this point should have actual \n characters
-        // if the original .env variable string had \\n.
+        console.log('[Firebase Admin Init] Private key snippet from parsed JSON (first 70 chars):', serviceAccount.private_key.substring(0, 70));
+
+        // Defensive cleaning of the private key
+        let cleanedPrivateKey = serviceAccount.private_key
+          .replace(/\r\n/g, '\n') // Ensure Unix newlines
+          .trim(); // Remove leading/trailing whitespace from the whole key
+
+        // Ensure the key content (between markers) does not have leading/trailing spaces on its lines,
+        // and that markers are on their own lines.
+        const keyParts = cleanedPrivateKey.split('\n');
+        const processedKeyParts = keyParts.map(part => part.trim()); // Trim each line
+        cleanedPrivateKey = processedKeyParts.join('\n');
+        
+        if (!cleanedPrivateKey.endsWith('\n')) {
+          cleanedPrivateKey += '\n'; // Ensure final newline
+        }
+        
+        // Update the service account object with the cleaned key
+        const finalServiceAccount = {
+            ...serviceAccount,
+            private_key: cleanedPrivateKey,
+        };
+        console.log('[Firebase Admin Init] Private key snippet after cleaning (first 70 chars):', finalServiceAccount.private_key.substring(0, 70));
+        
         admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+          credential: admin.credential.cert(finalServiceAccount),
         });
         
         console.log('[Firebase Admin Init] Firebase Admin App initialized successfully using parsed JSON.');
@@ -58,7 +76,7 @@ if (!admin.apps.length) {
         adminAuth = admin.auth();
         FieldValue = admin.firestore.FieldValue;
 
-        const currentProjectId = admin.instanceId()?.app?.options?.projectId || serviceAccount.project_id;
+        const currentProjectId = admin.instanceId()?.app?.options?.projectId || finalServiceAccount.project_id;
         if (currentProjectId) {
             console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
         } else {
