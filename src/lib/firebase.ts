@@ -21,8 +21,20 @@ let db: Firestore;
 
 if (!getApps().length) {
   app = initializeApp(firebaseConfig);
+  console.log('[Firebase Init] Firebase App initialized. Project ID from local firebaseConfig:', firebaseConfig.projectId);
+  if (app.options && app.options.projectId) {
+    console.log('[Firebase Init] Firebase App initialized. Project ID from active SDK options:', app.options.projectId);
+  } else {
+    console.log('[Firebase Init] Firebase App initialized, but could not retrieve projectId from active SDK options.');
+  }
 } else {
   app = getApp();
+  console.log('[Firebase Init] Existing Firebase App retrieved. Project ID from local firebaseConfig:', firebaseConfig.projectId);
+  if (app.options && app.options.projectId) {
+    console.log('[Firebase Init] Existing Firebase App retrieved. Project ID from active SDK options:', app.options.projectId);
+  } else {
+    console.log('[Firebase Init] Existing Firebase App retrieved, but could not retrieve projectId from active SDK options.');
+  }
 }
 
 db = getFirestore(app);
