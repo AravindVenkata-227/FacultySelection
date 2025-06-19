@@ -25,28 +25,30 @@ if (!admin.apps.length) {
       }
       if (!serviceAccount.project_id) {
         console.error('[Firebase Admin Init] ERROR: Parsed service account JSON is missing project_id.');
-        serviceAccount = null; // Invalidate
+        serviceAccount = null; 
       } else {
         console.log(`[Firebase Admin Init] Project ID from parsed JSON: ${serviceAccount.project_id}`);
       }
 
       if (serviceAccount && (!serviceAccount.private_key || typeof serviceAccount.private_key !== 'string')) {
         console.error('[Firebase Admin Init] ERROR: private_key is missing or not a string in the parsed service account JSON.');
-        serviceAccount = null; // Invalidate
+        serviceAccount = null; 
       } else if (serviceAccount) {
-        console.log('[Firebase Admin Init] Private key snippet from parsed JSON (first 70 chars):', serviceAccount.private_key.substring(0, 70));
-        // The private_key from JSON.parse should now have actual \n characters if the .env string had \\n
-        // No further explicit replacement of '\\n' to '\n' should be needed here if .env is correct.
+        // Log a snippet of the private key as it is after JSON.parse
+        // This key *should* have literal \n characters if the .env was \\n
+        console.log('[Firebase Admin Init] Private key snippet from parsed object (first 70 chars):', serviceAccount.private_key.substring(0, 70));
       }
 
     } catch (parseError: any) {
       console.error('[Firebase Admin Init] CRITICAL: Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON string:', parseError.message);
-      console.error('[Firebase Admin Init] Ensure the JSON string in .env is valid and newlines in private_key are correctly escaped (e.g., \\\\n).');
+      console.error('[Firebase Admin Init] Detail: Check the syntax of the JSON string in your .env file. Ensure newlines in private_key are correctly escaped (e.g., \\\\n if the JSON is on a single line).');
       serviceAccount = null;
     }
 
     if (serviceAccount && serviceAccount.project_id && serviceAccount.private_key) {
       try {
+        // The serviceAccount.private_key at this point should have actual \n characters
+        // if the original .env variable string had \\n.
         admin.initializeApp({
           credential: admin.credential.cert(serviceAccount),
         });
@@ -78,7 +80,7 @@ if (!admin.apps.length) {
   }
 } else {
   console.log('[Firebase Admin Init] Using existing Firebase Admin App.');
-  if (admin.apps[0]) { // Check if admin.apps[0] exists
+  if (admin.apps[0]) { 
     if (!adminDb) adminDb = admin.apps[0].firestore();
     if (!adminAuth) adminAuth = admin.apps[0].auth();
   }
@@ -87,11 +89,11 @@ if (!admin.apps.length) {
 
 if (admin.apps.length > 0 && admin.apps[0] && (!adminDb || !adminAuth || !FieldValue)) {
     console.warn('[Firebase Admin Init] Re-checking instances: Admin app exists but adminDb, adminAuth, or FieldValue might not have been fully initialized. Attempting to re-get.');
-    if(!adminDb) {
+    if(!adminDb && admin.apps[0]) {
         adminDb = admin.apps[0].firestore();
         console.log('[Firebase Admin Init] Re-assigned adminDb.');
     }
-    if(!adminAuth) {
+    if(!adminAuth && admin.apps[0]) {
         adminAuth = admin.apps[0].auth();
         console.log('[Firebase Admin Init] Re-assigned adminAuth.');
     }
