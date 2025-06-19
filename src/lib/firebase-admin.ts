@@ -26,8 +26,8 @@ if (!admin.apps.length) {
         console.error(`[Firebase Admin Init] Firebase Admin App initialization error using GOOGLE_APPLICATION_CREDENTIALS: ${gacError.message}`, gacError.stack ? gacError.stack : '');
         if (gacError.message && gacError.message.includes('INTERNAL')) {
             console.error("[Firebase Admin Init] Detail: The 'INTERNAL' error often points to an issue with the SDK's core components or environment setup. Ensure GOOGLE_APPLICATION_CREDENTIALS points to a valid, unaltered service account JSON file (try re-downloading it) in the project root and that there are no conflicts with firebase-admin package versions or dependencies.");
-        } else if (gacError.message && (gacError.message.includes('Failed to parse service account') || gacError.message.includes('Error parsing service account key') || gacError.message.includes('Invalid PEM formatted message'))) {
-            console.error('[Firebase Admin Init] Detail: The service account key file specified by GOOGLE_APPLICATION_CREDENTIALS might be corrupted, not valid JSON, inaccessible, or its private_key is malformed. Please try re-downloading the key file from Firebase console.');
+        } else if (gacError.message && (gacError.message.includes('Failed to parse service account') || gacError.message.includes('Error parsing service account key'))) {
+            console.error('[Firebase Admin Init] Detail: The service account key file specified by GOOGLE_APPLICATION_CREDENTIALS might be corrupted, not valid JSON, inaccessible. Please try re-downloading the key file from Firebase console and ensure the path is correct relative to project root.');
         }
       }
     } else {
