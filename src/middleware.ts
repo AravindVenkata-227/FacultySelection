@@ -1,42 +1,27 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-import { getAdminSession } from '@/lib/data'; // We need this to validate the session
+// DO NOT import getAdminSession or anything that uses firebase-admin here
 
 export async function middleware(request: NextRequest) {
   const adminAuthTokenCookie = request.cookies.get('admin-auth-token');
   const sessionId = adminAuthTokenCookie?.value;
   const { pathname } = request.nextUrl;
 
-  // Initialize isAuthenticated to false
-  let isAuthenticated = false;
+  // Simplified check: only checks for the presence of the session ID in the cookie.
+  // Actual validation against Firestore needs to happen in API routes/pages.
+  const isAuthenticatedBasedOnCookiePresence = !!sessionId;
 
-  // Only attempt to validate session if a sessionId exists
-  if (sessionId) {
-    try {
-      const session = await getAdminSession(sessionId); // This can throw if lib/data.ts or lib/firebase.ts fails at import
-      if (session && session.expiresAt.toDate() > new Date()) {
-        isAuthenticated = true;
-      }
-    } catch (error) {
-      // Log error if session validation fails, but don't break middleware
-      // This can happen if firebase.ts fails to initialize due to Edge Runtime issues with Node.js APIs
-      console.error('[Middleware] Error validating admin session:', error);
-      // Keep isAuthenticated as false
-    }
-  }
-
-
-  // If trying to access admin routes (excluding /admin/login) without a valid session, redirect to login
-  if (pathname.startsWith('/admin') && pathname !== '/admin/login' && !isAuthenticated) {
+  // If trying to access admin routes (excluding /admin/login) without a cookie, redirect to login
+  if (pathname.startsWith('/admin') && pathname !== '/admin/login' && !isAuthenticatedBasedOnCookiePresence) {
     const loginUrl = new URL('/admin/login', request.url);
-    console.log(`[Middleware] Unauthorized access to ${pathname}, redirecting to login.`);
+    console.log(`[Middleware] Admin auth cookie not found for ${pathname}, redirecting to login.`);
     return NextResponse.redirect(loginUrl);
   }
 
-  // If authenticated and trying to access /admin/login, redirect to admin dashboard
-  if (isAuthenticated && pathname === '/admin/login') {
+  // If a cookie exists and user is trying to access /admin/login, redirect to admin dashboard
+  if (isAuthenticatedBasedOnCookiePresence && pathname === '/admin/login') {
     const adminUrl = new URL('/admin', request.url);
-    console.log(`[Middleware] Authenticated user accessing login page, redirecting to /admin.`);
+    console.log(`[Middleware] Admin auth cookie found, user on login page, redirecting to /admin.`);
     return NextResponse.redirect(adminUrl);
   }
   
@@ -45,10 +30,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
   
-  // Protect other /api/admin routes
-  if (pathname.startsWith('/api/admin/') && !isAuthenticated) {
-      console.log(`[Middleware] Unauthorized API access to ${pathname}.`);
-      return NextResponse.json({ message: 'Authentication required' }, { status: 401 });
+  // Protect other /api/admin routes based on cookie presence.
+  // Actual validation of the sessionId should be done inside these API routes.
+  if (pathname.startsWith('/api/admin/') && !isAuthenticatedBasedOnCookiePresence) {
+      console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`);
+      return NextResponse.json({ message: 'Authentication required (cookie missing)' }, { status: 401 });
   }
 
   return NextResponse.next();
