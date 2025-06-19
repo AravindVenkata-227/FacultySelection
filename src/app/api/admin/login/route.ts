@@ -10,8 +10,8 @@ const SESSION_DURATION_HOURS = 24; // Session duration in hours
 
 export async function POST(request: NextRequest) {
   if (!ADMIN_USERNAME || !ADMIN_PASSWORD) {
-    console.error('Admin credentials (ADMIN_USERNAME, ADMIN_PASSWORD) are not set in environment variables.');
-    return NextResponse.json({ message: 'Server configuration error related to admin credentials.' }, { status: 500 });
+    console.error('[API Admin Login] CRITICAL: Admin credentials (ADMIN_USERNAME, ADMIN_PASSWORD) are not set in environment variables.');
+    return NextResponse.json({ message: 'Server configuration error related to admin credentials. Please contact support.' }, { status: 500 });
   }
 
   try {
@@ -21,12 +21,12 @@ export async function POST(request: NextRequest) {
       const sessionId = crypto.randomBytes(32).toString('hex');
       const expiresAt = new Date(Date.now() + SESSION_DURATION_HOURS * 60 * 60 * 1000);
 
-      // Attempt to create a session in Firestore
+      console.log(`[API Admin Login] Admin credentials match for user '${username}'. Attempting to create session with ID '${sessionId}'.`);
       const sessionResult = await createAdminSession(sessionId, 'admin_user', expiresAt);
 
       if (!sessionResult.success) {
-        // Log the specific error from createAdminSession if available
-        console.error('Failed to create admin session in Firestore:', sessionResult.error);
+        // Detailed error should have been logged by createAdminSession
+        console.error(`[API Admin Login] Failed to create admin session in Firestore. Session ID attempt: '${sessionId}'. Error from data service: ${sessionResult.error}`);
         return NextResponse.json({ message: 'Login failed due to a server error (session creation). Refer to server logs for details.' }, { status: 500 });
       }
 
@@ -35,16 +35,17 @@ export async function POST(request: NextRequest) {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
         path: '/',
-        maxAge: SESSION_DURATION_HOURS * 60 * 60, 
+        maxAge: SESSION_DURATION_HOURS * 60 * 60,
         sameSite: 'lax',
       });
+      console.log(`[API Admin Login] Login successful for user '${username}'. Session cookie set for session ID '${sessionId}'.`);
       return NextResponse.json({ message: 'Login successful' }, { status: 200 });
     } else {
+      console.warn(`[API Admin Login] Invalid login attempt for username: '${username}'.`);
       return NextResponse.json({ message: 'Invalid username or password' }, { status: 401 });
     }
-  } catch (error) {
-    console.error('Login API error:', error);
-    return NextResponse.json({ message: 'An internal error occurred during login processing.' }, { status: 500 });
+  } catch (error: any) {
+    console.error('[API Admin Login] Unexpected error during login processing:', error.message, error.stack);
+    return NextResponse.json({ message: 'An internal error occurred during login processing. Please try again.' }, { status: 500 });
   }
 }
-    
