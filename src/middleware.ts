@@ -1,6 +1,9 @@
 
 import { type NextRequest, NextResponse } from 'next/server';
-// DO NOT import getAdminSession or anything that uses firebase-admin here
+
+// IMPORTANT: DO NOT import from '@/lib/data' or any module that uses 'firebase-admin' here.
+// Middleware runs in the Edge runtime and cannot use Node.js specific modules.
+// Actual session validation (e.g., checking Firestore) MUST happen in your API routes or server-side page logic.
 
 export async function middleware(request: NextRequest) {
   const adminAuthTokenCookie = request.cookies.get('admin-auth-token');
@@ -8,20 +11,19 @@ export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Simplified check: only checks for the presence of the session ID in the cookie.
-  // Actual validation against Firestore needs to happen in API routes/pages.
   const isAuthenticatedBasedOnCookiePresence = !!sessionId;
 
   // If trying to access admin routes (excluding /admin/login) without a cookie, redirect to login
   if (pathname.startsWith('/admin') && pathname !== '/admin/login' && !isAuthenticatedBasedOnCookiePresence) {
     const loginUrl = new URL('/admin/login', request.url);
-    console.log(`[Middleware] Admin auth cookie not found for ${pathname}, redirecting to login.`);
+    // console.log(`[Middleware] Admin auth cookie not found for ${pathname}, redirecting to login.`); // Optional: for debugging
     return NextResponse.redirect(loginUrl);
   }
 
   // If a cookie exists and user is trying to access /admin/login, redirect to admin dashboard
   if (isAuthenticatedBasedOnCookiePresence && pathname === '/admin/login') {
     const adminUrl = new URL('/admin', request.url);
-    console.log(`[Middleware] Admin auth cookie found, user on login page, redirecting to /admin.`);
+    // console.log(`[Middleware] Admin auth cookie found, user on login page, redirecting to /admin.`); // Optional: for debugging
     return NextResponse.redirect(adminUrl);
   }
   
@@ -31,9 +33,9 @@ export async function middleware(request: NextRequest) {
   }
   
   // Protect other /api/admin routes based on cookie presence.
-  // Actual validation of the sessionId should be done inside these API routes.
+  // Actual validation of the sessionId MUST be done inside these API routes using getAdminSession from @/lib/data.
   if (pathname.startsWith('/api/admin/') && !isAuthenticatedBasedOnCookiePresence) {
-      console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`);
+      // console.log(`[Middleware] Admin auth cookie not found for API access to ${pathname}.`); // Optional: for debugging
       return NextResponse.json({ message: 'Authentication required (cookie missing)' }, { status: 401 });
   }
 

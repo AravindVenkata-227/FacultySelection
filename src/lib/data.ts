@@ -1,7 +1,10 @@
 
 import { adminDb, admin } from './firebase-admin'; // Use Firebase Admin SDK
 import type { Timestamp } from 'firebase-admin/firestore'; // Admin SDK Timestamp
-const { FieldValue } = admin.firestore; // Admin SDK FieldValue for serverTimestamp
+
+// Ensure FieldValue is accessed only if admin.firestore is available
+const FieldValue = admin.firestore ? admin.firestore.FieldValue : undefined;
+
 
 export interface Faculty {
   id: string;
@@ -87,8 +90,8 @@ export async function getSubjectById(id: string): Promise<Subject | undefined> {
 
 async function ensureSlotDocument(facultyId: string, subjectId: string): Promise<number> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot ensure slot document.");
-    throw new Error("Firebase Admin SDK not initialized.");
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot ensure slot document.");
+    throw new Error("Firebase Admin SDK (adminDb) not initialized for ensureSlotDocument.");
   }
   const faculty = _faculties.find(f => f.id === facultyId);
   const subject = _subjects.find(s => s.id === subjectId);
@@ -128,8 +131,8 @@ async function ensureSlotDocument(facultyId: string, subjectId: string): Promise
 
 export async function getFacultySlots(): Promise<Record<string, number>> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot get faculty slots.");
-    // Return a default structure or throw an error
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot get faculty slots.");
+    // Return a default structure or throw an error to indicate critical failure
     const defaultSlots: Record<string, number> = {};
      _subjects.forEach(subject => {
       subject.facultyOptions.forEach(facultyId => {
@@ -139,7 +142,10 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
         }
       });
     });
-    return defaultSlots; // Or throw an error
+    // This might be problematic if the caller expects slots from DB.
+    // Consider throwing an error instead if adminDb MUST be initialized.
+    console.warn("[Data Service Admin] Returning default in-memory slots due to uninitialized adminDb.");
+    return defaultSlots;
   }
   const slots: Record<string, number> = {};
   for (const subject of _subjects) {
@@ -161,8 +167,8 @@ export async function getFacultySlots(): Promise<Record<string, number>> {
 
 export async function updateFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot update faculty slot.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot update faculty slot.");
+    return { success: false, error: "Firebase Admin SDK (adminDb) not initialized for updateFacultySlot." };
   }
   const slotKey = `${facultyId}_${subjectId}`;
   const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
@@ -178,6 +184,7 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
         if (!faculty) throw new Error(`Faculty ${facultyId} not found during slot update transaction.`);
         console.warn(`[Data Service Admin Transaction] Slot document ${slotKey} not found. Initializing with ${faculty.initialSlots} slots. Project: ${activeProjectId}`);
         currentSlotValue = faculty.initialSlots;
+        // Ensure the document is created within the transaction before attempting to update
         transaction.set(slotDocRef, { slots: faculty.initialSlots }); 
       } else {
         const data = slotDoc.data();
@@ -204,8 +211,8 @@ export async function updateFacultySlot(facultyId: string, subjectId: string): P
 
 export async function incrementFacultySlot(facultyId: string, subjectId: string): Promise<{ success: boolean; error?: string; currentSlots?: number }> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot increment faculty slot.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot increment faculty slot.");
+    return { success: false, error: "Firebase Admin SDK (adminDb) not initialized for incrementFacultySlot." };
   }
   const slotKey = `${facultyId}_${subjectId}`;
   const slotDocRef = adminDb.collection(FACULTY_SLOTS_COLLECTION).doc(slotKey);
@@ -225,8 +232,9 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
       let currentSlotValue;
 
       if (!slotDoc.exists) {
-        console.warn(`[Data Service Admin Transaction] Slot document ${slotKey} not found during increment. Initializing to 0 before incrementing (will be set to 1). Project: ${activeProjectId}`);
+        console.warn(`[Data Service Admin Transaction] Slot document ${slotKey} not found during increment. Initializing to 0, will be set to 1 if possible. Project: ${activeProjectId}`);
         currentSlotValue = 0;
+         // Ensure the document is created within the transaction
          transaction.set(slotDocRef, { slots: 1 });
          return { success: true, currentSlots: 1 };
       } else {
@@ -243,7 +251,7 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
         return { success: true, currentSlots: currentSlotValue + 1 };
       } else {
         console.log(`[Data Service Admin Transaction] Slot for ${slotKey} already at max (${maxSlots}). No change. Project: ${activeProjectId}`);
-        return { success: true, currentSlots: maxSlots };
+        return { success: true, currentSlots: maxSlots }; // No change, but operation is 'successful' in that state is as intended.
       }
     });
   } catch (error: any) {
@@ -254,8 +262,8 @@ export async function incrementFacultySlot(facultyId: string, subjectId: string)
 
 export async function resetAllFacultySlots(): Promise<void> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot reset all faculty slots.");
-    throw new Error("Firebase Admin SDK not initialized.");
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot reset all faculty slots.");
+    throw new Error("Firebase Admin SDK (adminDb) not initialized for resetAllFacultySlots.");
   }
   const batch = adminDb.batch();
   const activeProjectId = admin.instanceId()?.app?.options?.projectId || 'UNKNOWN_PROJECT_ID';
@@ -282,16 +290,16 @@ export async function resetAllFacultySlots(): Promise<void> {
 // --- Student Submission Functions (Firestore Admin SDK) ---
 
 export async function addStudentSubmission(submissionData: Omit<StudentSubmission, 'timestamp' | 'rollNumber'> & { rollNumber: string }): Promise<{success: boolean, error?: string}> {
-  if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot add student submission.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+  if (!adminDb || !FieldValue) {
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb or FieldValue) not initialized. Cannot add student submission.");
+    return { success: false, error: "Firebase Admin SDK (adminDb or FieldValue) not initialized for addStudentSubmission." };
   }
   const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(submissionData.rollNumber);
   const activeProjectId = admin.instanceId()?.app?.options?.projectId || 'UNKNOWN_PROJECT_ID';
   try {
     await submissionDocRef.set({
       ...submissionData,
-      timestamp: FieldValue.serverTimestamp(),
+      timestamp: FieldValue.serverTimestamp(), // Use Admin SDK's serverTimestamp
     });
     console.log(`[Data Service Admin] Student submission for '${submissionData.rollNumber}' added successfully to Firestore. Project: ${activeProjectId}`);
     return { success: true };
@@ -303,7 +311,7 @@ export async function addStudentSubmission(submissionData: Omit<StudentSubmissio
 
 export async function getStudentSubmissionByRollNumber(rollNumber: string): Promise<StudentSubmission | null> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot get student submission by roll number.");
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot get student submission by roll number.");
     return null;
   }
   const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(rollNumber);
@@ -312,19 +320,19 @@ export async function getStudentSubmissionByRollNumber(rollNumber: string): Prom
     const docSnap = await submissionDocRef.get();
     if (docSnap.exists) {
       const data = docSnap.data();
-      if (!data) return null;
-      return { ...data, rollNumber: docSnap.id } as StudentSubmission;
+      if (!data) return null; // Should not happen if exists is true, but good practice
+      return { ...data, rollNumber: docSnap.id } as StudentSubmission; // Ensure rollNumber is part of the returned object
     }
     return null;
   } catch (error: any) {
     console.error(`[Data Service Admin] Error fetching student submission for '${rollNumber}' from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
-    return null; 
+    return null; // Or throw error depending on how critical this is for the caller
   }
 }
 
 export async function getAllStudentSubmissions(): Promise<StudentSubmission[] | null> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot get all student submissions.");
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot get all student submissions.");
     return null;
   }
   const submissions: StudentSubmission[] = [];
@@ -333,31 +341,32 @@ export async function getAllStudentSubmissions(): Promise<StudentSubmission[] | 
     const querySnapshot = await adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).orderBy("timestamp", "desc").get();
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
-      if (data) {
+      if (data) { // Check if data is not undefined
         submissions.push({ ...data, rollNumber: docSnap.id } as StudentSubmission);
       }
     });
     return submissions;
   } catch (error: any) {
     console.error(`[Data Service Admin] Error fetching all student submissions from Firestore. Project: ${activeProjectId}:`, error.message, error.stack);
-    return null;
+    return null; // Or throw error
   }
 }
 
 export async function deleteStudentSubmission(rollNumber: string): Promise<{success: boolean, error?: string, deletedData?: StudentSubmission}> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot delete student submission.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot delete student submission.");
+    return { success: false, error: "Firebase Admin SDK (adminDb) not initialized for deleteStudentSubmission." };
   }
   const submissionDocRef = adminDb.collection(STUDENT_SUBMISSIONS_COLLECTION).doc(rollNumber);
   const activeProjectId = admin.instanceId()?.app?.options?.projectId || 'UNKNOWN_PROJECT_ID';
   try {
     const docSnap = await submissionDocRef.get();
     if (!docSnap.exists) {
+      console.warn(`[Data Service Admin] Attempted to delete non-existent submission for roll number '${rollNumber}'. Project: ${activeProjectId}`);
       return { success: false, error: "Submission not found in Firestore." };
     }
     const data = docSnap.data();
-    if (!data) return { success: false, error: "Submission data not found though document exists." };
+    if (!data) return { success: false, error: "Submission data not found though document exists." }; // Should be caught by !docSnap.exists
 
     const deletedData = { ...data, rollNumber: docSnap.id } as StudentSubmission;
     await submissionDocRef.delete();
@@ -371,29 +380,29 @@ export async function deleteStudentSubmission(rollNumber: string): Promise<{succ
 
 // --- Admin Session Functions (Firestore Admin SDK) ---
 export async function createAdminSession(sessionId: string, userId: string, expiresAtDate: Date): Promise<{ success: boolean; error?: string }> {
-  if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot create admin session.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+  if (!adminDb || !FieldValue) {
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb or FieldValue) not initialized. Cannot create admin session.");
+    return { success: false, error: "Firebase Admin SDK (adminDb or FieldValue) not initialized for createAdminSession." };
   }
   const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
   const activeProjectId = admin.instanceId()?.app?.options?.projectId || 'UNKNOWN_PROJECT_ID';
   try {
     await sessionDocRef.set({
       userId: userId,
-      createdAt: FieldValue.serverTimestamp(),
-      expiresAt: admin.firestore.Timestamp.fromDate(expiresAtDate),
+      createdAt: FieldValue.serverTimestamp(), // Admin SDK's serverTimestamp
+      expiresAt: admin.firestore.Timestamp.fromDate(expiresAtDate), // Convert JS Date to Admin SDK Timestamp
     });
     console.log(`[Data Service Admin] Admin session created successfully in Firestore for Session ID: '${sessionId}'. Project: ${activeProjectId}`);
     return { success: true };
   } catch (error: any) {
-    console.error(`[Data Service Admin] Error creating admin session '${sessionId}' in Firestore. Project: ${activeProjectId}:`, error.message, error.stack ? error.stack : error);
+    console.error(`[Data Service Admin] Error creating admin session '${sessionId}' in Firestore. Project: ${activeProjectId}:`, error.message, error.stack ? error.stack : error); // Log stack if available
     return { success: false, error: error.message || "Failed to create admin session in Firestore." };
   }
 }
 
 export async function getAdminSession(sessionId: string): Promise<AdminSession | null> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot get admin session.");
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot get admin session.");
     return null;
   }
   const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
@@ -402,8 +411,9 @@ export async function getAdminSession(sessionId: string): Promise<AdminSession |
     const docSnap = await sessionDocRef.get();
     if (docSnap.exists) {
       const sessionData = docSnap.data();
-      if (!sessionData) return null;
+      if (!sessionData) return null; // Should not occur if docSnap.exists is true
 
+      // Ensure expiresAt is a Firestore Timestamp (from Admin SDK)
       if (!sessionData.expiresAt || !(sessionData.expiresAt instanceof admin.firestore.Timestamp)) {
         console.error(`[Data Service Admin] Admin session '${sessionId}' found but 'expiresAt' field is missing or not a Firestore Timestamp. Data:`, sessionData, `Project: ${activeProjectId}`);
         await deleteAdminSession(sessionId); // Attempt to delete invalid session
@@ -412,7 +422,8 @@ export async function getAdminSession(sessionId: string): Promise<AdminSession |
       
       const session = { ...sessionData, sessionId: docSnap.id } as AdminSession;
 
-      if (session.expiresAt.toDate() < new Date()) {
+      // Compare dates correctly
+      if (session.expiresAt.toDate().getTime() < new Date().getTime()) {
         console.log(`[Data Service Admin] Admin session '${sessionId}' found but has expired. Deleting. Project: ${activeProjectId}`);
         await deleteAdminSession(sessionId);
         return null;
@@ -428,8 +439,8 @@ export async function getAdminSession(sessionId: string): Promise<AdminSession |
 
 export async function deleteAdminSession(sessionId: string): Promise<{ success: boolean; error?: string }> {
   if (!adminDb) {
-    console.error("[Data Service Admin] Firebase Admin SDK not initialized. Cannot delete admin session.");
-    return { success: false, error: "Firebase Admin SDK not initialized." };
+    console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot delete admin session.");
+    return { success: false, error: "Firebase Admin SDK (adminDb) not initialized for deleteAdminSession." };
   }
   const sessionDocRef = adminDb.collection(ADMIN_SESSIONS_COLLECTION).doc(sessionId);
   const activeProjectId = admin.instanceId()?.app?.options?.projectId || 'UNKNOWN_PROJECT_ID';
@@ -443,9 +454,6 @@ export async function deleteAdminSession(sessionId: string): Promise<{ success: 
   }
 }
 
+// Re-exporting types from schema.ts for convenience if actions.ts or other server files need them.
+// However, it's generally cleaner for files to import directly from the source of truth (schema.ts).
 export type { StudentInfo, FacultySelectionEntry, FacultyConnectFormValues, SubmissionPayload } from '../lib/schema';
-
-// This line was attempting to import from a non-existent file or had a typo in earlier versions.
-// Removed, as `adminDb` and `admin` are now correctly imported from './firebase-admin'.
-// export { adminDb, adminAuth, admin }; // This would cause a re-export conflict
-
