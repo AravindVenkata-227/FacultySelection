@@ -1,49 +1,48 @@
 
 import * as admin from 'firebase-admin';
 
-const serviceAccountKeyPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
-
-if (!serviceAccountKeyPath) {
-  console.error(
-    '[Firebase Admin Init] CRITICAL: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set. ' +
-    'This is required for the Firebase Admin SDK to authenticate. ' +
-    'Ensure the .env file has this variable set to the ABSOLUTE path of your service account JSON key file.'
-  );
-} else {
-  console.log(`[Firebase Admin Init] GOOGLE_APPLICATION_CREDENTIALS path from env: "${serviceAccountKeyPath}"`);
-}
-
+// Try to get the service account JSON from an environment variable
+const serviceAccountJsonString = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 
 if (!admin.apps.length) {
-  try {
-    if (!serviceAccountKeyPath) {
-      throw new Error('GOOGLE_APPLICATION_CREDENTIALS environment variable not set.');
-    }
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccountKeyPath),
-    });
-    console.log('[Firebase Admin Init] Firebase Admin App initialized successfully using GOOGLE_APPLICATION_CREDENTIALS.');
-    
-    const currentProjectId = admin.instanceId()?.app?.options?.projectId;
-    if (currentProjectId) {
-        console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
-    } else {
-        console.warn('[Firebase Admin Init] Could not automatically determine Admin SDK project ID directly from options. Relies on service account file.');
-    }
+  if (!serviceAccountJsonString) {
+    console.error(
+      '[Firebase Admin Init] CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. ' +
+      'This is required for the Firebase Admin SDK to authenticate. ' +
+      'Please set this variable to the JSON content of your service account key.'
+    );
+  } else {
+    try {
+      const serviceAccount = JSON.parse(serviceAccountJsonString);
+      admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount), // Pass the parsed object
+      });
+      console.log('[Firebase Admin Init] Firebase Admin App initialized successfully using FIREBASE_SERVICE_ACCOUNT_JSON.');
 
-  } catch (error: any) {
-    console.error('[Firebase Admin Init] Firebase Admin App initialization error:', error.message);
-    if (error.message.includes('Credential implementation provided to initializeApp()')) {
-        console.error('[Firebase Admin Init] Detail: This often means GOOGLE_APPLICATION_CREDENTIALS is not set correctly or the file is unreadable/invalid.');
-    } else if (error.code === 'ENOENT' || (typeof error.message === 'string' && error.message.includes('ENOENT'))) {
-        console.error(`[Firebase Admin Init] Detail: The service account key file specified by GOOGLE_APPLICATION_CREDENTIALS was not found at path: ${serviceAccountKeyPath}`);
-    } else if (error.message.includes('Failed to parse certificate key')) {
-        console.error(`[Firebase Admin Init] Detail: The service account key file at ${serviceAccountKeyPath} seems to be malformed or not a valid JSON key file.`);
+      const currentProjectId = admin.instanceId()?.app?.options?.projectId || serviceAccount.project_id;
+      if (currentProjectId) {
+          console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
+      } else {
+          console.warn('[Firebase Admin Init] Could not automatically determine Admin SDK project ID.');
+      }
+
+    } catch (error: any) {
+      console.error('[Firebase Admin Init] Firebase Admin App initialization error:', error.message);
+      if (error.message.includes('Invalid service account') || error.message.includes('Failed to parse private key') || error.message.includes('Error parsing service account key')) {
+          console.error('[Firebase Admin Init] Detail: The JSON string in FIREBASE_SERVICE_ACCOUNT_JSON might be malformed, not a valid service account key, or the private_key is not correctly formatted (e.g., newline characters).');
+      }
     }
   }
 }
 
-const adminDb = admin.firestore();
-const adminAuth = admin.auth();
+let adminDb: admin.firestore.Firestore | undefined;
+let adminAuth: admin.auth.Auth | undefined;
+
+if (admin.apps.length > 0) {
+  adminDb = admin.firestore();
+  adminAuth = admin.auth();
+} else {
+  console.warn('[Firebase Admin Init] Firebase Admin SDK not initialized. Firestore and Auth services will not be available via admin context.');
+}
 
 export { adminDb, adminAuth, admin };
