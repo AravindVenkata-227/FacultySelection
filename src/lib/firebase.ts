@@ -19,24 +19,23 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 
-if (!getApps().length) {
+if (typeof window !== 'undefined' && !getApps().length) {
   app = initializeApp(firebaseConfig);
-  console.log('[Firebase Init] Firebase App initialized. Project ID from local firebaseConfig:', firebaseConfig.projectId);
-  if (app.options && app.options.projectId) {
-    console.log('[Firebase Init] Firebase App initialized. Project ID from active SDK options:', app.options.projectId);
-  } else {
-    console.log('[Firebase Init] Firebase App initialized, but could not retrieve projectId from active SDK options.');
-  }
-} else {
+  console.log('[Firebase Client Init] Firebase App initialized. Project ID from local firebaseConfig:', firebaseConfig.projectId);
+} else if (typeof window !== 'undefined') {
   app = getApp();
-  console.log('[Firebase Init] Existing Firebase App retrieved. Project ID from local firebaseConfig:', firebaseConfig.projectId);
-  if (app.options && app.options.projectId) {
-    console.log('[Firebase Init] Existing Firebase App retrieved. Project ID from active SDK options:', app.options.projectId);
-  } else {
-    console.log('[Firebase Init] Existing Firebase App retrieved, but could not retrieve projectId from active SDK options.');
-  }
+  console.log('[Firebase Client Init] Existing Firebase App retrieved. Project ID from local firebaseConfig:', firebaseConfig.projectId);
+} else {
+  // Avoid initializing client SDK in server/edge environments if not already done by Admin SDK
+  // or if this file is accidentally imported server-side for client SDK.
+  // The Admin SDK should be the primary way to interact with Firebase on the server.
+  console.log('[Firebase Client Init] Skipped client app initialization (server environment or already initialized).');
 }
 
-db = getFirestore(app);
+// Only initialize db if app was initialized (client-side)
+// @ts-ignore app might not be initialized if on server
+if (app) {
+  db = getFirestore(app);
+}
 
 export { app, db };

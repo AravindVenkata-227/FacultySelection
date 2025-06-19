@@ -9,18 +9,18 @@ const projectIdFromEnv = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || process.
 
 if (!admin.apps.length) {
   try {
-    admin.initializeApp({
-      // The Admin SDK will automatically attempt to find credentials via
-      // GOOGLE_APPLICATION_CREDENTIALS env var or default locations.
-      // If projectId is in your service account key, it's often picked up automatically.
-      // Explicitly setting projectId can be a good practice if there's ambiguity.
-      // projectId: projectIdFromEnv, // Uncomment if you have this env var set and want to be explicit
-    });
-    console.log('[Firebase Admin Init] Firebase Admin App initialized.');
+    const serviceAccountPath = process.env.GOOGLE_APPLICATION_CREDENTIALS;
+    if (!serviceAccountPath) {
+      throw new Error('CRITICAL: GOOGLE_APPLICATION_CREDENTIALS environment variable is not set. Cannot initialize Firebase Admin SDK.');
+    }
     
-    // Log the project ID the Admin SDK is actually using
-    // Note: admin.app().options.projectId might not be directly available in older versions or certain contexts
-    // A more reliable way if above is problematic:
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccountPath),
+      // Optionally, you can specify the databaseURL if needed, but usually not required for Firestore.
+      // databaseURL: `https://${projectIdFromEnv}.firebaseio.com` 
+    });
+    console.log('[Firebase Admin Init] Firebase Admin App initialized using GOOGLE_APPLICATION_CREDENTIALS.');
+    
     const currentProjectId = admin.instanceId().app.options.projectId;
     if (currentProjectId) {
         console.log('[Firebase Admin Init] Admin SDK is configured for project ID:', currentProjectId);
@@ -33,12 +33,11 @@ if (!admin.apps.length) {
 
   } catch (error: any) {
     console.error('[Firebase Admin Init] Firebase Admin App initialization error:', error.message);
-    // Provide more details if it's a credential issue
     if (error.message.includes('Credential implementation provided to initializeApp()')) {
         console.error('[Firebase Admin Init] Detail: This often means GOOGLE_APPLICATION_CREDENTIALS is not set correctly or the file is unreadable/invalid.');
+    } else if (error.message.includes('ENOENT')) {
+        console.error(`[Firebase Admin Init] Detail: The service account key file specified by GOOGLE_APPLICATION_CREDENTIALS was not found at path: ${process.env.GOOGLE_APPLICATION_CREDENTIALS}`);
     }
-    // Log the stack for more detailed debugging if needed
-    // console.error(error.stack); 
   }
 }
 
