@@ -348,8 +348,8 @@ export async function deleteStudentSubmission(rollNumber: string): Promise<{succ
 // --- Admin Session Functions (Firestore) ---
 export async function createAdminSession(sessionId: string, userId: string, expiresAt: Date): Promise<{ success: boolean; error?: string }> {
   const sessionDocRef = doc(db, ADMIN_SESSIONS_COLLECTION, sessionId);
-  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID';
-  console.log(`[Data Service] Attempting to create admin session in Firestore. Collection: '${ADMIN_SESSIONS_COLLECTION}', Session ID: '${sessionId}', User ID: '${userId}', Expires At: '${expiresAt.toISOString()}'. Project ID from db.app.options: ${activeProjectId}`);
+  const activeProjectId = db.app.options.projectId || 'UNKNOWN_PROJECT_ID'; // Get active project ID
+  console.log(`[Data Service] Attempting to create admin session in Firestore. Collection: '${ADMIN_SESSIONS_COLLECTION}', Session ID: '${sessionId}', User ID: '${userId}', Expires At: '${expiresAt.toISOString()}'. Project: ${activeProjectId}`);
   try {
     await setDoc(sessionDocRef, {
       userId: userId,
@@ -410,3 +410,8 @@ export async function deleteAdminSession(sessionId: string): Promise<{ success: 
   }
 }
 
+// Ensure this file exports something to be a module, even if it's just an empty object or a type.
+// This is often necessary if all exports are conditional or might be tree-shaken away otherwise.
+export type { StudentInfo, FacultySelectionEntry, FacultyConnectFormValues, SubmissionPayload } from '../lib/schema';
+
+    
