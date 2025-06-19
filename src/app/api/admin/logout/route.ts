@@ -11,11 +11,15 @@ export async function POST(request: NextRequest) {
     const sessionId = cookieStore.get('admin-auth-token')?.value;
 
     if (sessionId) {
-      await deleteAdminSession(sessionId);
+      // The deleteAdminSession function will check if adminDb is initialized.
+      // If not, it will log an error and return { success: false }.
+      // We can proceed with clearing the cookie regardless, as it's best-effort.
+      const deleteResult = await deleteAdminSession(sessionId);
+      if (!deleteResult.success) {
+        console.warn(`[API Admin Logout] Failed to delete session '${sessionId}' from Firestore, but proceeding to clear cookie. Error: ${deleteResult.error}`);
+      }
     }
     
-    // Clear the cookie by setting its Max-Age to 0 or by using delete
-    // Setting it with options ensures it's cleared correctly across browsers/paths
     cookieStore.set('admin-auth-token', '', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
@@ -23,15 +27,12 @@ export async function POST(request: NextRequest) {
       maxAge: 0, 
       sameSite: 'lax',
     });
-    // Alternatively, if cookies().delete() works reliably for HttpOnly cookies in your Next.js version:
-    // cookieStore.delete('admin-auth-token');
-
 
     return NextResponse.json({ message: 'Logout successful' }, { status: 200 });
   } catch (error) {
-    console.error('Logout API error:', error);
-    return NextResponse.json({ message: 'An internal error occurred' }, { status: 500 });
+    console.error('[API Admin Logout] Unexpected error:', error);
+    // Check if adminDb was the issue, though the error might be different here.
+    // This is more of a general catch-all.
+    return NextResponse.json({ message: 'An internal server error occurred during logout.' }, { status: 500 });
   }
 }
-
-    
