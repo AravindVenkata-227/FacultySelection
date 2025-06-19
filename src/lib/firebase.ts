@@ -9,7 +9,7 @@ import { getFirestore, type Firestore } from 'firebase/firestore';
 const firebaseConfig = {
   apiKey: "AIzaSyDfapu5biuvKY1PT90ZoOaLn_YLv4owpeQ",
   authDomain: "faculty-connect-owcc7.firebaseapp.com",
-  projectId: "faculty-connect-owcc7",
+  projectId: "faculty-connect-owcc7", // This should be your FIREBASE project ID
   storageBucket: "faculty-connect-owcc7.firebasestorage.app",
   messagingSenderId: "336783424106",
   appId: "1:336783424106:web:0f45c49122c1246075a813"
