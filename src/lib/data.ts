@@ -132,20 +132,7 @@ async function ensureSlotDocument(facultyId: string, subjectId: string): Promise
 export async function getFacultySlots(): Promise<Record<string, number>> {
   if (!adminDb) {
     console.error("[Data Service Admin] Firebase Admin SDK (adminDb) not initialized. Cannot get faculty slots.");
-    // Return a default structure or throw an error to indicate critical failure
-    const defaultSlots: Record<string, number> = {};
-     _subjects.forEach(subject => {
-      subject.facultyOptions.forEach(facultyId => {
-        const faculty = _faculties.find(f => f.id === facultyId);
-        if (faculty) {
-          defaultSlots[`${faculty.id}_${subject.id}`] = faculty.initialSlots;
-        }
-      });
-    });
-    // This might be problematic if the caller expects slots from DB.
-    // Consider throwing an error instead if adminDb MUST be initialized.
-    console.warn("[Data Service Admin] Returning default in-memory slots due to uninitialized adminDb.");
-    return defaultSlots;
+    throw new Error("Firebase Admin SDK (adminDb) not initialized for getFacultySlots.");
   }
   const slots: Record<string, number> = {};
   for (const subject of _subjects) {
